@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:simpletodo_flutter/model/todo_model.dart';
+import '../model/todo_model.dart';
 
 class TodoViewModel extends ChangeNotifier {
   List<Todo> _todos = [];
@@ -19,7 +19,7 @@ class TodoViewModel extends ChangeNotifier {
   }
 
   void toggleDone(int index, bool isAutoDeleteOn) {
-    if (index >= _todos.length) return; // 안전장치
+    if (index >= _todos.length) return;
     _todos[index].isDone = !_todos[index].isDone;
     _saveTodos();
     notifyListeners();
@@ -27,12 +27,27 @@ class TodoViewModel extends ChangeNotifier {
     if (isAutoDeleteOn && _todos[index].isDone) {
       Future.delayed(const Duration(milliseconds: 500), () {
         if (index < _todos.length && _todos[index].isDone) {
-          _todos.removeAt(index);
-          _saveTodos();
-          notifyListeners();
+          deleteTodo(index); // 아래 만든 삭제 함수 재사용
         }
       });
     }
+  }
+
+  // [기능 1] 알림 시간 수정 (켜거나 끄기)
+  // newTime이 null이면 끄기, 시간이 있으면 켜기
+  void updateReminder(int index, DateTime? newTime) {
+    if (index >= _todos.length) return;
+    _todos[index].reminderTime = newTime;
+    _saveTodos();
+    notifyListeners();
+  }
+
+  // [기능 2] 일정 아예 삭제하기
+  void deleteTodo(int index) {
+    if (index >= _todos.length) return;
+    _todos.removeAt(index);
+    _saveTodos();
+    notifyListeners();
   }
 
   void _sortTodos() {
