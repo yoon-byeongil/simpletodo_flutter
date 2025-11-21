@@ -13,7 +13,6 @@ class TodoViewModel extends ChangeNotifier {
     _loadTodos();
   }
 
-  // [수정] isGlobalOn 파라미터 추가
   void addTodo(String title, DateTime due, DateTime? reminder, bool isGlobalOn) {
     int newId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
@@ -21,7 +20,6 @@ class TodoViewModel extends ChangeNotifier {
 
     _todos.add(newTodo);
 
-    // [핵심 로직] 전체 알림이 켜져 있을 때만 스케줄링 등록
     if (reminder != null && isGlobalOn) {
       _notificationService.scheduleNotification(id: newId, title: title, scheduledTime: reminder);
     }
@@ -51,17 +49,14 @@ class TodoViewModel extends ChangeNotifier {
     }
   }
 
-  // [수정] isGlobalOn 파라미터 추가
   void updateReminder(int index, DateTime? newTime, bool isGlobalOn) {
     if (index >= _todos.length) return;
 
     final todo = _todos[index];
     todo.reminderTime = newTime;
 
-    // 기존 알림 취소
     _notificationService.cancelNotification(todo.id);
 
-    // [핵심 로직] 전체 알림이 켜져 있을 때만 재등록
     if (newTime != null && isGlobalOn) {
       _notificationService.scheduleNotification(id: todo.id, title: todo.title, scheduledTime: newTime);
     }
@@ -78,16 +73,23 @@ class TodoViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ▼▼▼ [이 부분이 빠져 있어서 오류가 났던 겁니다!] ▼▼▼
+  void clearAllTodos() {
+    _todos.clear(); // 리스트 비우기
+    _notificationService.cancelAll(); // 알림 다 끄기
+    _saveTodos(); // 빈 리스트 저장
+    notifyListeners(); // 화면 갱신
+  }
+  // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
   void cancelAllReminders() {
     _notificationService.cancelAll();
     notifyListeners();
   }
 
-  // [추가 기능 2] 설정 ON 시 -> 리스트를 돌면서 미래의 알림들 다시 예약
   void restoreAllReminders() {
     final now = DateTime.now();
     for (var todo in _todos) {
-      // 완료되지 않았고, 알림 시간이 있고, 미래인 경우만 재등록
       if (!todo.isDone && todo.reminderTime != null && todo.reminderTime!.isAfter(now)) {
         _notificationService.scheduleNotification(id: todo.id, title: todo.title, scheduledTime: todo.reminderTime!);
       }

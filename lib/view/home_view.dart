@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart'; // [필수] 아이폰 스타일 위젯
+import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-
 import '../view_model/todo_view_model.dart';
 import '../view_model/settings_view_model.dart';
 import 'settings_view.dart';
@@ -23,19 +22,13 @@ class _HomeScreenState extends State<HomeScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (context) {
         return AddTodoBottomSheet(
           initialTitle: _titleController.text,
           onSaved: (DateTime due, DateTime? reminder) {
-            // [수정] ViewModel에 '현재 전체 알림 설정 값'을 같이 보냄
             final isGlobalOn = context.read<SettingsViewModel>().isNotificationOn;
-
-            context.read<TodoViewModel>().addTodo(
-              _titleController.text,
-              due,
-              reminder,
-              isGlobalOn, // 여기!
-            );
+            context.read<TodoViewModel>().addTodo(_titleController.text, due, reminder, isGlobalOn);
             _titleController.clear();
             FocusScope.of(context).unfocus();
           },
@@ -44,36 +37,43 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // [아이폰 스타일] 알림 시간 선택 피커
   Future<void> _showCupertinoReminderPicker(int index, DateTime initialDate) async {
     DateTime tempPickedDate = initialDate;
+    // 다크모드 여부 확인
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     await showCupertinoModalPopup(
       context: context,
       builder: (ctx) {
         return Container(
           height: 300,
-          color: Colors.white, // 다크모드 대응 시 수정 필요 (Theme.of(context).scaffoldBackgroundColor)
+          color: isDark ? const Color(0xFF1C1C1E) : Colors.white, // [수정] 배경색 동적 변경
           child: Column(
             children: [
-              // 상단 완료 버튼 바
               Container(
-                color: Colors.grey[200],
+                color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF0F0F0), // [수정] 상단바 색상
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [CupertinoButton(child: const Text("완료"), onPressed: () => Navigator.pop(ctx))],
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    CupertinoButton(
+                      child: const Text("キャンセル", style: TextStyle(color: Colors.grey)),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                    CupertinoButton(
+                      child: const Text("完了", style: TextStyle(fontWeight: FontWeight.bold)),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
                 ),
               ),
-              // 룰렛 피커
               Expanded(
                 child: CupertinoDatePicker(
-                  mode: CupertinoDatePickerMode.dateAndTime, // 날짜+시간 한번에
+                  mode: CupertinoDatePickerMode.dateAndTime,
                   initialDateTime: initialDate,
-                  minimumDate: DateTime.now(), // 과거 시간 선택 불가
+                  // [오류 해결 핵심] 현재 시간보다 5분 전부터 선택 가능하게 해서 충돌 방지
+                  minimumDate: DateTime.now().subtract(const Duration(minutes: 5)),
                   use24hFormat: true,
-                  onDateTimeChanged: (DateTime date) {
-                    tempPickedDate = date;
-                  },
+                  onDateTimeChanged: (date) => tempPickedDate = date,
                 ),
               ),
             ],
@@ -81,22 +81,21 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       },
     );
-
     if (!mounted) return;
-
-    // [수정] ViewModel에 '현재 전체 알림 설정 값'을 같이 보냄
     final isGlobalOn = context.read<SettingsViewModel>().isNotificationOn;
     context.read<TodoViewModel>().updateReminder(index, tempPickedDate, isGlobalOn);
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text("My Simple Todo"),
+        title: const Text("Tasks", style: TextStyle(fontWeight: FontWeight.w800)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings),
+            icon: const Icon(Icons.settings_outlined),
             onPressed: () {
               Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen()));
             },
@@ -105,92 +104,151 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Column(
         children: [
-          Padding(
+          // 입력창 영역
+          Container(
             padding: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor, // [수정] 테마 색상 사용
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
+            ),
             child: Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _titleController,
-                    decoration: const InputDecoration(hintText: '할 일을 입력하세요', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 12)),
+                    decoration: InputDecoration(
+                      hintText: '新しいタスクを追加...',
+                      hintStyle: TextStyle(color: Colors.grey.shade400),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      filled: true,
+                      // [수정] 입력창 배경색 (다크모드 대응)
+                      fillColor: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF5F5F7),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                    ),
                   ),
                 ),
-                const SizedBox(width: 10),
-                IconButton.filled(onPressed: _onAddPressed, icon: const Icon(Icons.add)),
+                const SizedBox(width: 12),
+                IconButton.filled(
+                  onPressed: _onAddPressed,
+                  style: IconButton.styleFrom(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    backgroundColor: Theme.of(context).primaryColor,
+                  ),
+                  icon: const Icon(Icons.arrow_upward, color: Colors.white),
+                ),
               ],
             ),
           ),
-          const Divider(height: 1),
+
+          // 리스트 영역
           Expanded(
             child: Consumer2<TodoViewModel, SettingsViewModel>(
               builder: (context, todoVM, settingsVM, child) {
                 if (todoVM.todos.isEmpty) {
-                  return const Center(child: Text("할 일이 없습니다.\n+ 버튼을 눌러 추가해보세요!", textAlign: TextAlign.center));
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.task_alt, size: 60, color: Colors.grey.shade300),
+                        const SizedBox(height: 16),
+                        Text("予定がありません", style: TextStyle(color: Colors.grey.shade500, fontSize: 16)),
+                      ],
+                    ),
+                  );
                 }
-                return ListView.builder(
+                return ListView.separated(
+                  padding: const EdgeInsets.all(16),
                   itemCount: todoVM.todos.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final todo = todoVM.todos[index];
 
                     return Dismissible(
                       key: ValueKey(todo.title + todo.dueDateTime.toString()),
                       direction: DismissDirection.endToStart,
-                      onDismissed: (direction) {
+                      onDismissed: (_) {
                         todoVM.deleteTodo(index);
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("'${todo.title}' 삭제됨")));
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("'${todo.title}' 削除しました")));
                       },
                       background: Container(
-                        color: Colors.red,
+                        decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(12)),
                         alignment: Alignment.centerRight,
                         padding: const EdgeInsets.only(right: 20),
-                        child: const Icon(Icons.delete, color: Colors.white),
+                        child: const Icon(Icons.delete_outline, color: Colors.white),
                       ),
-                      child: ListTile(
-                        leading: Checkbox(
-                          value: todo.isDone,
-                          onChanged: (value) {
-                            todoVM.toggleDone(index, settingsVM.isAutoDelete);
-                          },
-                        ),
-                        title: Text(
-                          todo.title,
-                          style: TextStyle(decoration: todo.isDone ? TextDecoration.lineThrough : null, color: todo.isDone ? Colors.grey : null),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(DateFormat('MM/dd HH:mm 마감').format(todo.dueDateTime)),
-                            if (todo.reminderTime != null) Text("🔔 ${DateFormat('MM/dd HH:mm').format(todo.reminderTime!)}", style: const TextStyle(color: Colors.orange, fontSize: 12)),
-                          ],
-                        ),
-                        trailing: IconButton(
-                          icon: Icon(todo.reminderTime != null ? Icons.notifications_active : Icons.notifications_off_outlined, color: todo.reminderTime != null ? Colors.orange : Colors.grey),
-                          onPressed: () {
-                            if (todo.reminderTime != null) {
-                              // 알림 해제
-                              showDialog(
-                                context: context,
-                                builder: (ctx) => AlertDialog(
-                                  title: const Text("알림 해제"),
-                                  content: const Text("알림을 끄시겠습니까?"),
-                                  actions: [
-                                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")),
-                                    TextButton(
-                                      onPressed: () {
-                                        // [수정] isGlobalOn 전달
-                                        todoVM.updateReminder(index, null, settingsVM.isNotificationOn);
-                                        Navigator.pop(ctx);
-                                      },
-                                      child: const Text("해제"),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            } else {
-                              // 알림 설정 (Cupertino 피커 호출)
-                              _showCupertinoReminderPicker(index, todo.dueDateTime);
-                            }
-                          },
+                      child: Card(
+                        margin: EdgeInsets.zero,
+                        // [수정] CardColor는 main.dart에서 정의한 값을 자동으로 따라갑니다.
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          leading: Transform.scale(
+                            scale: 1.1,
+                            child: Checkbox(
+                              shape: const CircleBorder(),
+                              activeColor: Theme.of(context).primaryColor,
+                              value: todo.isDone,
+                              onChanged: (_) => todoVM.toggleDone(index, settingsVM.isAutoDelete),
+                            ),
+                          ),
+                          title: Text(
+                            todo.title,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              decoration: todo.isDone ? TextDecoration.lineThrough : null,
+                              // [수정] 글자색 테마 대응
+                              color: todo.isDone ? Colors.grey : Theme.of(context).textTheme.bodyLarge?.color,
+                            ),
+                          ),
+                          subtitle: Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Row(
+                              children: [
+                                Icon(Icons.calendar_today, size: 14, color: Colors.grey.shade600),
+                                const SizedBox(width: 4),
+                                Text(DateFormat('yyyy/MM/dd HH:mm').format(todo.dueDateTime), style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                                if (todo.reminderTime != null) ...[
+                                  const SizedBox(width: 8),
+                                  const Icon(Icons.notifications_active, size: 14, color: Colors.orange),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    DateFormat('HH:mm').format(todo.reminderTime!),
+                                    style: const TextStyle(color: Colors.orange, fontSize: 13, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          trailing: IconButton(
+                            icon: Icon(
+                              todo.reminderTime != null ? Icons.notifications : Icons.notifications_none,
+                              color: todo.reminderTime != null ? Theme.of(context).primaryColor : Colors.grey.shade400,
+                            ),
+                            onPressed: () {
+                              if (todo.reminderTime != null) {
+                                showCupertinoDialog(
+                                  context: context,
+                                  builder: (ctx) => CupertinoAlertDialog(
+                                    title: const Text("通知オフ"),
+                                    content: const Text("このタスクの通知をオフにしますか？"),
+                                    actions: [
+                                      CupertinoDialogAction(child: const Text("キャンセル"), onPressed: () => Navigator.pop(ctx)),
+                                      CupertinoDialogAction(
+                                        isDestructiveAction: true,
+                                        child: const Text("オフにする"),
+                                        onPressed: () {
+                                          todoVM.updateReminder(index, null, settingsVM.isNotificationOn);
+                                          Navigator.pop(ctx);
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              } else {
+                                _showCupertinoReminderPicker(index, todo.dueDateTime);
+                              }
+                            },
+                          ),
                         ),
                       ),
                     );
@@ -205,7 +263,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// Bottom Sheet 수정 (Cupertino 적용)
 class AddTodoBottomSheet extends StatefulWidget {
   final String initialTitle;
   final Function(DateTime due, DateTime? reminder) onSaved;
@@ -223,36 +280,40 @@ class _AddTodoBottomSheetState extends State<AddTodoBottomSheet> {
   @override
   void initState() {
     super.initState();
-    // 분 단위 00으로 깔끔하게 맞추기 (선택사항)
     final now = DateTime.now();
     _selectedDate = DateTime(now.year, now.month, now.day, now.hour, now.minute);
   }
 
-  // [아이폰 스타일] 날짜+시간 선택 팝업
   void _showCupertinoDatePicker() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     showCupertinoModalPopup(
       context: context,
       builder: (ctx) => Container(
-        height: 250,
-        color: Colors.white,
+        height: 280,
+        color: isDark ? const Color(0xFF1C1C1E) : Colors.white, // [수정] 배경색 대응
         child: Column(
           children: [
             Container(
-              color: Colors.grey[200],
+              color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF0F0F0), // [수정] 상단바 대응
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
-                children: [CupertinoButton(child: const Text("완료"), onPressed: () => Navigator.pop(ctx))],
+                children: [
+                  CupertinoButton(
+                    child: const Text("完了", style: TextStyle(fontWeight: FontWeight.bold)),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
               ),
             ),
             Expanded(
               child: CupertinoDatePicker(
                 mode: CupertinoDatePickerMode.dateAndTime,
                 initialDateTime: _selectedDate,
-                minimumDate: DateTime.now().subtract(const Duration(minutes: 1)),
+                // [오류 해결 핵심] 5분 전부터 선택 가능하게 해서 충돌 방지
+                minimumDate: DateTime.now().subtract(const Duration(minutes: 5)),
                 use24hFormat: true,
-                onDateTimeChanged: (DateTime newDate) {
-                  setState(() => _selectedDate = newDate);
-                },
+                onDateTimeChanged: (newDate) => setState(() => _selectedDate = newDate),
               ),
             ),
           ],
@@ -264,77 +325,125 @@ class _AddTodoBottomSheetState extends State<AddTodoBottomSheet> {
   @override
   Widget build(BuildContext context) {
     final isGlobalNotiOn = context.watch<SettingsViewModel>().isNotificationOn;
+    // [수정] 다크모드인지 확인
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      padding: const EdgeInsets.all(20),
-      height: 400,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor, // [수정] 배경색 테마 대응
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      height: 450,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("'${widget.initialTitle}' 상세 설정", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
           const SizedBox(height: 20),
+          Text(
+            widget.initialTitle,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 30),
 
-          const Text("📅 마감 일정", style: TextStyle(color: Colors.grey)),
-          const SizedBox(height: 10),
-
-          // [수정] 버튼 하나로 통합하고 Cupertino 피커 호출
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: _showCupertinoDatePicker,
-              style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 15)),
-              child: Text(
-                DateFormat('yyyy-MM-dd  HH:mm').format(_selectedDate),
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue),
+          const Text(
+            "締め切り (Deadline)",
+            style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          InkWell(
+            onTap: _showCupertinoDatePicker,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+              decoration: BoxDecoration(
+                border: Border.all(color: isDark ? Colors.grey.shade700 : Colors.grey.shade300), // [수정] 테두리 색상
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.calendar_month, color: Colors.blueAccent),
+                  const SizedBox(width: 10),
+                  Text(DateFormat('yyyy/MM/dd HH:mm').format(_selectedDate), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                ],
               ),
             ),
           ),
 
           const SizedBox(height: 20),
 
-          const Text("🔔 알림 설정", style: TextStyle(color: Colors.grey)),
-          const SizedBox(height: 10),
+          const Text(
+            "通知設定 (Notification)",
+            style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
 
-          // 알림 설정 부분 UI 유지 (Global 설정 안내는 그대로 유효)
           if (!isGlobalNotiOn)
-            const Text("설정 메뉴에서 '알림 켜기'가 꺼져있어 알림이 울리지 않습니다.", style: TextStyle(color: Colors.redAccent, fontSize: 13))
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+              child: const Row(
+                children: [
+                  Icon(Icons.error_outline, color: Colors.red, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text("設定で「通知」をオンにしてください。", style: TextStyle(color: Colors.red, fontSize: 13)),
+                  ),
+                ],
+              ),
+            )
           else
             DropdownButtonFormField<int>(
               value: _reminderOption,
-              decoration: const InputDecoration(border: OutlineInputBorder()),
+              dropdownColor: isDark ? const Color(0xFF2C2C2E) : Colors.white, // [수정] 드롭다운 메뉴 배경색
+              decoration: InputDecoration(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+              ),
               items: const [
-                DropdownMenuItem(value: 0, child: Text("알림 없음")),
-                DropdownMenuItem(value: 1, child: Text("정각 (마감 시간)")),
-                DropdownMenuItem(value: 2, child: Text("10분 전")),
-                DropdownMenuItem(value: 3, child: Text("1시간 전")),
+                DropdownMenuItem(value: 0, child: Text("なし (None)")),
+                DropdownMenuItem(value: 1, child: Text("時間通り (On Time)")),
+                DropdownMenuItem(value: 2, child: Text("10分前 (10 min before)")),
+                DropdownMenuItem(value: 3, child: Text("1時間前 (1 hour before)")),
               ],
-              onChanged: (value) {
-                setState(() => _reminderOption = value!);
-              },
+              onChanged: (value) => setState(() => _reminderOption = value!),
             ),
 
           const Spacer(),
 
           SizedBox(
             width: double.infinity,
-            height: 50,
+            height: 54,
             child: FilledButton(
+              style: FilledButton.styleFrom(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                backgroundColor: Theme.of(context).primaryColor,
+              ),
               onPressed: () {
                 DateTime? reminderTime;
-                // Global 설정이 켜져있어야만 알림 시간 계산 (UI 표시용)
-                // 실제 스케줄링 차단은 ViewModel에서 한번 더 방어함
                 if (isGlobalNotiOn && _reminderOption != 0) {
                   if (_reminderOption == 1) reminderTime = _selectedDate;
                   if (_reminderOption == 2) reminderTime = _selectedDate.subtract(const Duration(minutes: 10));
                   if (_reminderOption == 3) reminderTime = _selectedDate.subtract(const Duration(hours: 1));
                 }
-
                 widget.onSaved(_selectedDate, reminderTime);
                 Navigator.pop(context);
               },
-              child: const Text("저장"),
+              child: const Text("保存する", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             ),
           ),
+          const SizedBox(height: 10),
         ],
       ),
     );
