@@ -21,7 +21,7 @@ class NotificationService {
       tz.setLocalLocation(tz.UTC);
     }
 
-    const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@drawable/launch_background');
+    const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher'); // ✅ 앱 아이콘으로
     const DarwinInitializationSettings initializationSettingsIOS = DarwinInitializationSettings(requestAlertPermission: true, requestBadgePermission: true, requestSoundPermission: true);
     const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid, iOS: initializationSettingsIOS);
     await flutterLocalNotificationsPlugin.initialize(initializationSettings);
