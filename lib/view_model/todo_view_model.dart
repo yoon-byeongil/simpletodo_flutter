@@ -2,17 +2,30 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../model/todo_model.dart';
+import '../service/notification_service.dart';
 
 class TodoViewModel extends ChangeNotifier {
   List<Todo> _todos = [];
   List<Todo> get todos => _todos;
+  final NotificationService _notificationService = NotificationService();
 
   TodoViewModel() {
     _loadTodos();
   }
 
-  void addTodo(String title, DateTime due, DateTime? reminder) {
-    _todos.add(Todo(title: title, dueDateTime: due, reminderTime: reminder));
+  // [수정] isGlobalOn 파라미터 추가
+  void addTodo(String title, DateTime due, DateTime? reminder, bool isGlobalOn) {
+    int newId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+    final newTodo = Todo(id: newId, title: title, dueDateTime: due, reminderTime: reminder);
+
+    _todos.add(newTodo);
+
+    // [핵심 로직] 전체 알림이 켜져 있을 때만 스케줄링 등록
+    if (reminder != null && isGlobalOn) {
+      _notificationService.scheduleNotification(id: newId, title: title, scheduledTime: reminder);
+    }
+
     _sortTodos();
     _saveTodos();
     notifyListeners();
@@ -21,32 +34,64 @@ class TodoViewModel extends ChangeNotifier {
   void toggleDone(int index, bool isAutoDeleteOn) {
     if (index >= _todos.length) return;
     _todos[index].isDone = !_todos[index].isDone;
+
+    if (_todos[index].isDone) {
+      _notificationService.cancelNotification(_todos[index].id);
+    }
+
     _saveTodos();
     notifyListeners();
 
     if (isAutoDeleteOn && _todos[index].isDone) {
       Future.delayed(const Duration(milliseconds: 500), () {
         if (index < _todos.length && _todos[index].isDone) {
-          deleteTodo(index); // 아래 만든 삭제 함수 재사용
+          deleteTodo(index);
         }
       });
     }
   }
 
-  // [기능 1] 알림 시간 수정 (켜거나 끄기)
-  // newTime이 null이면 끄기, 시간이 있으면 켜기
-  void updateReminder(int index, DateTime? newTime) {
+  // [수정] isGlobalOn 파라미터 추가
+  void updateReminder(int index, DateTime? newTime, bool isGlobalOn) {
     if (index >= _todos.length) return;
-    _todos[index].reminderTime = newTime;
+
+    final todo = _todos[index];
+    todo.reminderTime = newTime;
+
+    // 기존 알림 취소
+    _notificationService.cancelNotification(todo.id);
+
+    // [핵심 로직] 전체 알림이 켜져 있을 때만 재등록
+    if (newTime != null && isGlobalOn) {
+      _notificationService.scheduleNotification(id: todo.id, title: todo.title, scheduledTime: newTime);
+    }
+
     _saveTodos();
     notifyListeners();
   }
 
-  // [기능 2] 일정 아예 삭제하기
   void deleteTodo(int index) {
     if (index >= _todos.length) return;
+    _notificationService.cancelNotification(_todos[index].id);
     _todos.removeAt(index);
     _saveTodos();
+    notifyListeners();
+  }
+
+  void cancelAllReminders() {
+    _notificationService.cancelAll();
+    notifyListeners();
+  }
+
+  // [추가 기능 2] 설정 ON 시 -> 리스트를 돌면서 미래의 알림들 다시 예약
+  void restoreAllReminders() {
+    final now = DateTime.now();
+    for (var todo in _todos) {
+      // 완료되지 않았고, 알림 시간이 있고, 미래인 경우만 재등록
+      if (!todo.isDone && todo.reminderTime != null && todo.reminderTime!.isAfter(now)) {
+        _notificationService.scheduleNotification(id: todo.id, title: todo.title, scheduledTime: todo.reminderTime!);
+      }
+    }
     notifyListeners();
   }
 
