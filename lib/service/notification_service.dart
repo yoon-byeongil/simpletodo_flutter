@@ -10,26 +10,46 @@ class NotificationService {
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
-  Future<void> init() async {
-    // ... (기존 init 코드와 동일) ...
-    tz.initializeTimeZones();
+  // [중요] 채널 ID를 변수로 관리해서 실수를 방지합니다.
+  static const String channelId = 'todo_channel_final_v1';
+  static const String channelName = 'Todo Notifications';
 
+  Future<void> init() async {
+    tz.initializeTimeZones();
     try {
       tz.setLocalLocation(tz.getLocation('Asia/Tokyo'));
     } catch (e) {
-      // 혹시나 실패하면 기본 UTC로 설정
       tz.setLocalLocation(tz.UTC);
     }
 
-    const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher'); // ✅ 앱 아이콘으로
-    const DarwinInitializationSettings initializationSettingsIOS = DarwinInitializationSettings(requestAlertPermission: true, requestBadgePermission: true, requestSoundPermission: true);
-    const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid, iOS: initializationSettingsIOS);
-    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
-    final platform = flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    // 1. 초기화 설정
+    const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher'); // 기본 아이콘 사용
 
-    if (platform != null) {
-      await platform.requestNotificationsPermission();
+    const DarwinInitializationSettings initializationSettingsIOS = DarwinInitializationSettings(requestAlertPermission: true, requestBadgePermission: true, requestSoundPermission: true);
+
+    const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid, iOS: initializationSettingsIOS);
+
+    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+
+    // 2. 안드로이드 플랫폼 구현체 가져오기
+    final AndroidFlutterLocalNotificationsPlugin? androidImplementation = flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+
+    // ▼▼▼ [작성자님 제안] 채널 명시적 생성 코드 추가 ▼▼▼
+    if (androidImplementation != null) {
+      // 채널 생성 (여기서 중요도와 소리 설정을 확정짓습니다)
+      await androidImplementation.createNotificationChannel(
+        const AndroidNotificationChannel(
+          channelId, // 위에서 정의한 ID
+          channelName, // 위에서 정의한 이름
+          importance: Importance.max, // 중요도 최상 (헤드업 알림 표시)
+          playSound: true,
+        ),
+      );
+
+      // 권한 요청도 여기서
+      await androidImplementation.requestNotificationsPermission();
     }
+    // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
   }
 
   Future<void> scheduleNotification({required int id, required String title, required DateTime scheduledTime}) async {
@@ -51,17 +71,21 @@ class NotificationService {
         tz.TZDateTime.from(scheduledTime, tz.local),
         const NotificationDetails(
           iOS: DarwinNotificationDetails(presentAlert: true, presentBadge: true, presentSound: true),
-          android: AndroidNotificationDetails('todo_channel_id_v2', 'Todo Notifications V2', importance: Importance.max, priority: Priority.high),
+          // ▼▼▼ [중요] 위에서 만든 것과 똑같은 채널 ID 사용 ▼▼▼
+          android: AndroidNotificationDetails(
+            channelId, // 'todo_channel_final_v1'
+            channelName, // 'Todo Notifications'
+            importance: Importance.max,
+            priority: Priority.high,
+          ),
         ),
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       );
-      // 이 줄이 콘솔에 떠야 성공입니다!
-      debugPrint("✅ [성공] 알림 예약 완료! (잠시 후 알림이 울려야 정상)");
+      debugPrint("✅ [성공] 알림 예약 완료!");
     } catch (e) {
       debugPrint("🔥 [에러] 알림 예약 실패: $e");
     }
-    debugPrint("---------------------------------------------------");
   }
 
   Future<void> cancelNotification(int id) async {
