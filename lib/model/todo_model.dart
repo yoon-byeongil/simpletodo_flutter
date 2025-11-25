@@ -1,35 +1,39 @@
 class Todo {
-  int id; // [추가] 알림 ID로 사용할 고유 번호
+  int id;
   String title;
   DateTime dueDateTime;
   DateTime? reminderTime;
   bool isDone;
+  bool isPinned; // [추가] 상단 고정 여부
 
   Todo({
-    required this.id, // [추가]
+    required this.id,
     required this.title,
     required this.dueDateTime,
     this.reminderTime,
     this.isDone = false,
+    this.isPinned = false, // [추가] 기본값 false
   });
 
   Map<String, dynamic> toJson() {
     return {
-      'id': id, // [추가]
+      'id': id,
       'title': title,
       'dueDateTime': dueDateTime.toIso8601String(),
       'reminderTime': reminderTime?.toIso8601String(),
       'isDone': isDone,
+      'isPinned': isPinned, // [추가]
     };
   }
 
   factory Todo.fromJson(Map<String, dynamic> json) {
     return Todo(
-      id: json['id'] ?? DateTime.now().millisecondsSinceEpoch, // 없으면 현재시간으로 생성
+      id: json['id'] ?? DateTime.now().millisecondsSinceEpoch,
       title: json['title'],
       dueDateTime: DateTime.parse(json['dueDateTime']),
       reminderTime: json['reminderTime'] != null ? DateTime.parse(json['reminderTime']) : null,
       isDone: json['isDone'],
+      isPinned: json['isPinned'] ?? false, // [추가] 없으면 false
     );
   }
 }

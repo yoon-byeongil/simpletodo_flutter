@@ -36,6 +36,7 @@ dependencies:
   shared_preferences: ^2.2.0  # 데이터를 핸드폰에 저장하는 패키지
   flutter_local_notifications: ^17.0.0  # 알림 기능
   timezone: ^0.9.2                      # 정확한 시간 계산용
+  flutter_slidable: ^3.0.0
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.

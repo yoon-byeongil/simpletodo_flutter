@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
+
 import '../view_model/todo_view_model.dart';
 import '../view_model/settings_view_model.dart';
 import 'settings_view.dart';
@@ -16,6 +18,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _titleController = TextEditingController();
 
+  // 추가 버튼 (Bottom Sheet 호출)
   void _onAddPressed() {
     if (_titleController.text.isEmpty) return;
 
@@ -24,11 +27,13 @@ class _HomeScreenState extends State<HomeScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        return AddTodoBottomSheet(
+        return TodoBottomSheet(
           initialTitle: _titleController.text,
-          onSaved: (DateTime due, DateTime? reminder) {
+          initialDue: DateTime.now(),
+          initialReminder: null,
+          onSaved: (String title, DateTime due, DateTime? reminder) {
             final isGlobalOn = context.read<SettingsViewModel>().isNotificationOn;
-            context.read<TodoViewModel>().addTodo(_titleController.text, due, reminder, isGlobalOn);
+            context.read<TodoViewModel>().addTodo(title, due, reminder, isGlobalOn);
             _titleController.clear();
             FocusScope.of(context).unfocus();
           },
@@ -37,53 +42,24 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<void> _showCupertinoReminderPicker(int index, DateTime initialDate) async {
-    DateTime tempPickedDate = initialDate;
-    // 다크모드 여부 확인
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    await showCupertinoModalPopup(
+  // 수정 버튼 (리스트에서 호출)
+  void _onEditPressed(int index, String currentTitle, DateTime currentDue, DateTime? currentReminder) {
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) {
-        return Container(
-          height: 300,
-          color: isDark ? const Color(0xFF1C1C1E) : Colors.white, // [수정] 배경색 동적 변경
-          child: Column(
-            children: [
-              Container(
-                color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF0F0F0), // [수정] 상단바 색상
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    CupertinoButton(
-                      child: const Text("キャンセル", style: TextStyle(color: Colors.grey)),
-                      onPressed: () => Navigator.pop(ctx),
-                    ),
-                    CupertinoButton(
-                      child: const Text("完了", style: TextStyle(fontWeight: FontWeight.bold)),
-                      onPressed: () => Navigator.pop(ctx),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: CupertinoDatePicker(
-                  mode: CupertinoDatePickerMode.dateAndTime,
-                  initialDateTime: initialDate,
-                  // [오류 해결 핵심] 현재 시간보다 5분 전부터 선택 가능하게 해서 충돌 방지
-                  minimumDate: DateTime.now().subtract(const Duration(minutes: 5)),
-                  use24hFormat: true,
-                  onDateTimeChanged: (date) => tempPickedDate = date,
-                ),
-              ),
-            ],
-          ),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return TodoBottomSheet(
+          initialTitle: currentTitle,
+          initialDue: currentDue,
+          initialReminder: currentReminder,
+          onSaved: (String title, DateTime due, DateTime? reminder) {
+            final isGlobalOn = context.read<SettingsViewModel>().isNotificationOn;
+            context.read<TodoViewModel>().editTodo(index, title, due, reminder, isGlobalOn);
+          },
         );
       },
     );
-    if (!mounted) return;
-    final isGlobalOn = context.read<SettingsViewModel>().isNotificationOn;
-    context.read<TodoViewModel>().updateReminder(index, tempPickedDate, isGlobalOn);
   }
 
   @override
@@ -104,11 +80,11 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Column(
         children: [
-          // 입력창 영역
+          // 입력창
           Container(
             padding: const EdgeInsets.all(16.0),
             decoration: BoxDecoration(
-              color: Theme.of(context).cardColor, // [수정] 테마 색상 사용
+              color: Theme.of(context).cardColor,
               borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
             ),
             child: Row(
@@ -121,7 +97,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       hintStyle: TextStyle(color: Colors.grey.shade400),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                       filled: true,
-                      // [수정] 입력창 배경색 (다크모드 대응)
                       fillColor: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF5F5F7),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
                     ),
@@ -163,22 +138,62 @@ class _HomeScreenState extends State<HomeScreen> {
                   itemBuilder: (context, index) {
                     final todo = todoVM.todos[index];
 
-                    return Dismissible(
-                      key: ValueKey(todo.title + todo.dueDateTime.toString()),
-                      direction: DismissDirection.endToStart,
-                      onDismissed: (_) {
-                        todoVM.deleteTodo(index);
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("'${todo.title}' 削除しました")));
-                      },
-                      background: Container(
-                        decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(12)),
-                        alignment: Alignment.centerRight,
-                        padding: const EdgeInsets.only(right: 20),
-                        child: const Icon(Icons.delete_outline, color: Colors.white),
+                    // [기능] 시간이 지났는지 확인 (현재시간보다 이전이면 true)
+                    final isOverdue = todo.dueDateTime.isBefore(DateTime.now()) && !todo.isDone;
+
+                    return Slidable(
+                      key: ValueKey(todo.id),
+                      // 왼쪽: 고정
+                      startActionPane: ActionPane(
+                        motion: const ScrollMotion(),
+                        children: [
+                          SlidableAction(
+                            onPressed: (context) {
+                              todoVM.togglePin(index);
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(todo.isPinned ? "固定を解除しました" : "タスクを固定しました"), duration: const Duration(seconds: 1)));
+                            },
+                            // [수정] 고정 버튼 색상: 진한 회색으로 변경
+                            backgroundColor: Colors.grey[700]!,
+                            foregroundColor: Colors.white,
+                            icon: todo.isPinned ? Icons.push_pin_outlined : Icons.push_pin,
+                            label: todo.isPinned ? '解除' : '固定',
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ],
+                      ),
+                      // 오른쪽: 수정, 삭제
+                      endActionPane: ActionPane(
+                        motion: const ScrollMotion(),
+                        children: [
+                          SlidableAction(
+                            onPressed: (context) {
+                              _onEditPressed(index, todo.title, todo.dueDateTime, todo.reminderTime);
+                            },
+                            backgroundColor: Colors.blue,
+                            foregroundColor: Colors.white,
+                            icon: Icons.edit,
+                            label: '編集',
+                            borderRadius: const BorderRadius.horizontal(left: Radius.circular(12)),
+                          ),
+                          SlidableAction(
+                            onPressed: (context) {
+                              todoVM.deleteTodo(index);
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("削除しました")));
+                            },
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                            icon: Icons.delete,
+                            label: '削除',
+                            borderRadius: const BorderRadius.horizontal(right: Radius.circular(12)),
+                          ),
+                        ],
                       ),
                       child: Card(
                         margin: EdgeInsets.zero,
-                        // [수정] CardColor는 main.dart에서 정의한 값을 자동으로 따라갑니다.
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: todo.isPinned ? const BorderSide(color: Colors.grey, width: 2) : BorderSide.none,
+                        ),
                         child: ListTile(
                           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                           leading: Transform.scale(
@@ -196,59 +211,46 @@ class _HomeScreenState extends State<HomeScreen> {
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
                               decoration: todo.isDone ? TextDecoration.lineThrough : null,
-                              // [수정] 글자색 테마 대응
                               color: todo.isDone ? Colors.grey : Theme.of(context).textTheme.bodyLarge?.color,
                             ),
                           ),
-                          subtitle: Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Row(
-                              children: [
-                                Icon(Icons.calendar_today, size: 14, color: Colors.grey.shade600),
-                                const SizedBox(width: 4),
-                                Text(DateFormat('yyyy/MM/dd HH:mm').format(todo.dueDateTime), style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-                                if (todo.reminderTime != null) ...[
-                                  const SizedBox(width: 8),
-                                  const Icon(Icons.notifications_active, size: 14, color: Colors.orange),
-                                  const SizedBox(width: 2),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  // [기능] 시간이 지났으면 아이콘과 텍스트를 빨간색으로 표시
+                                  Icon(Icons.calendar_today, size: 14, color: isOverdue ? Colors.red : Colors.grey.shade600),
+                                  const SizedBox(width: 4),
                                   Text(
-                                    DateFormat('HH:mm').format(todo.reminderTime!),
-                                    style: const TextStyle(color: Colors.orange, fontSize: 13, fontWeight: FontWeight.bold),
+                                    DateFormat('yyyy/MM/dd HH:mm').format(todo.dueDateTime),
+                                    style: TextStyle(color: isOverdue ? Colors.red : Colors.grey.shade600, fontSize: 13, fontWeight: isOverdue ? FontWeight.bold : FontWeight.normal),
                                   ),
+                                  if (isOverdue)
+                                    const Text(
+                                      " (期限切れ)",
+                                      style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold),
+                                    ),
                                 ],
-                              ],
-                            ),
-                          ),
-                          trailing: IconButton(
-                            icon: Icon(
-                              todo.reminderTime != null ? Icons.notifications : Icons.notifications_none,
-                              color: todo.reminderTime != null ? Theme.of(context).primaryColor : Colors.grey.shade400,
-                            ),
-                            onPressed: () {
-                              if (todo.reminderTime != null) {
-                                showCupertinoDialog(
-                                  context: context,
-                                  builder: (ctx) => CupertinoAlertDialog(
-                                    title: const Text("通知オフ"),
-                                    content: const Text("このタスクの通知をオフにしますか？"),
-                                    actions: [
-                                      CupertinoDialogAction(child: const Text("キャンセル"), onPressed: () => Navigator.pop(ctx)),
-                                      CupertinoDialogAction(
-                                        isDestructiveAction: true,
-                                        child: const Text("オフにする"),
-                                        onPressed: () {
-                                          todoVM.updateReminder(index, null, settingsVM.isNotificationOn);
-                                          Navigator.pop(ctx);
-                                        },
+                              ),
+                              if (todo.reminderTime != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.notifications_active, size: 14, color: Colors.orange),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        DateFormat('MM/dd HH:mm').format(todo.reminderTime!),
+                                        style: const TextStyle(color: Colors.orange, fontSize: 13, fontWeight: FontWeight.bold),
                                       ),
                                     ],
                                   ),
-                                );
-                              } else {
-                                _showCupertinoReminderPicker(index, todo.dueDateTime);
-                              }
-                            },
+                                ),
+                            ],
                           ),
+                          trailing: todo.isPinned ? Icon(Icons.push_pin, color: Colors.grey[700], size: 20) : null,
                         ),
                       ),
                     );
@@ -263,39 +265,59 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class AddTodoBottomSheet extends StatefulWidget {
+// 추가/수정 겸용 바텀 시트
+class TodoBottomSheet extends StatefulWidget {
   final String initialTitle;
-  final Function(DateTime due, DateTime? reminder) onSaved;
+  final DateTime initialDue;
+  final DateTime? initialReminder;
+  final Function(String title, DateTime due, DateTime? reminder) onSaved;
 
-  const AddTodoBottomSheet({super.key, required this.initialTitle, required this.onSaved});
+  const TodoBottomSheet({super.key, required this.initialTitle, required this.initialDue, required this.initialReminder, required this.onSaved});
 
   @override
-  State<AddTodoBottomSheet> createState() => _AddTodoBottomSheetState();
+  State<TodoBottomSheet> createState() => _TodoBottomSheetState();
 }
 
-class _AddTodoBottomSheetState extends State<AddTodoBottomSheet> {
-  late DateTime _selectedDate;
-  int _reminderOption = 1;
+class _TodoBottomSheetState extends State<TodoBottomSheet> {
+  late TextEditingController _textController;
+  late DateTime _deadlineDate;
+  bool _isReminderEnabled = false;
+  late DateTime _reminderDate;
 
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
-    _selectedDate = DateTime(now.year, now.month, now.day, now.hour, now.minute);
+    _textController = TextEditingController(text: widget.initialTitle);
+    _deadlineDate = widget.initialDue;
+
+    // 초기값이 이미 과거라면, 피커의 시작 기준은 현재 시간으로 잡기 위해 로직 분리
+    if (widget.initialReminder != null) {
+      _isReminderEnabled = true;
+      _reminderDate = widget.initialReminder!;
+    } else {
+      _isReminderEnabled = false;
+      _reminderDate = DateTime.now();
+    }
   }
 
-  void _showCupertinoDatePicker() {
+  void _showCupertinoDatePicker(int type) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    DateTime initial = type == 0 ? _deadlineDate : _reminderDate;
+
+    // [수정] 피커를 열 때 초기값이 과거라면 현재 시간으로 보정 (사용자 편의)
+    if (initial.isBefore(DateTime.now())) {
+      initial = DateTime.now();
+    }
 
     showCupertinoModalPopup(
       context: context,
       builder: (ctx) => Container(
         height: 280,
-        color: isDark ? const Color(0xFF1C1C1E) : Colors.white, // [수정] 배경색 대응
+        color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
         child: Column(
           children: [
             Container(
-              color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF0F0F0), // [수정] 상단바 대응
+              color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF0F0F0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -309,11 +331,19 @@ class _AddTodoBottomSheetState extends State<AddTodoBottomSheet> {
             Expanded(
               child: CupertinoDatePicker(
                 mode: CupertinoDatePickerMode.dateAndTime,
-                initialDateTime: _selectedDate,
-                // [오류 해결 핵심] 5분 전부터 선택 가능하게 해서 충돌 방지
-                minimumDate: DateTime.now().subtract(const Duration(minutes: 5)),
+                initialDateTime: initial,
+                // [수정] 과거 선택 방지 (현재 시간 - 1분 정도 여유)
+                minimumDate: DateTime.now().subtract(const Duration(minutes: 1)),
                 use24hFormat: true,
-                onDateTimeChanged: (newDate) => setState(() => _selectedDate = newDate),
+                onDateTimeChanged: (newDate) {
+                  setState(() {
+                    if (type == 0) {
+                      _deadlineDate = newDate;
+                    } else {
+                      _reminderDate = newDate;
+                    }
+                  });
+                },
               ),
             ),
           ],
@@ -325,16 +355,15 @@ class _AddTodoBottomSheetState extends State<AddTodoBottomSheet> {
   @override
   Widget build(BuildContext context) {
     final isGlobalNotiOn = context.watch<SettingsViewModel>().isNotificationOn;
-    // [수정] 다크모드인지 확인
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor, // [수정] 배경색 테마 대응
+        color: Theme.of(context).cardColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      height: 450,
+      height: 600,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -346,13 +375,14 @@ class _AddTodoBottomSheetState extends State<AddTodoBottomSheet> {
             ),
           ),
           const SizedBox(height: 20),
-          Text(
-            widget.initialTitle,
+
+          TextField(
+            controller: _textController,
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+            decoration: const InputDecoration(hintText: "タスク名", border: InputBorder.none),
           ),
-          const SizedBox(height: 30),
+          const Divider(),
+          const SizedBox(height: 10),
 
           const Text(
             "締め切り (Deadline)",
@@ -360,19 +390,19 @@ class _AddTodoBottomSheetState extends State<AddTodoBottomSheet> {
           ),
           const SizedBox(height: 8),
           InkWell(
-            onTap: _showCupertinoDatePicker,
+            onTap: () => _showCupertinoDatePicker(0),
             borderRadius: BorderRadius.circular(12),
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
               decoration: BoxDecoration(
-                border: Border.all(color: isDark ? Colors.grey.shade700 : Colors.grey.shade300), // [수정] 테두리 색상
+                border: Border.all(color: isDark ? Colors.grey.shade700 : Colors.grey.shade300),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 children: [
                   const Icon(Icons.calendar_month, color: Colors.blueAccent),
                   const SizedBox(width: 10),
-                  Text(DateFormat('yyyy/MM/dd HH:mm').format(_selectedDate), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  Text(DateFormat('yyyy/MM/dd HH:mm').format(_deadlineDate), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
@@ -380,45 +410,51 @@ class _AddTodoBottomSheetState extends State<AddTodoBottomSheet> {
 
           const SizedBox(height: 20),
 
-          const Text(
-            "通知設定 (Notification)",
-            style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                "通知設定 (Notification)",
+                style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+              Switch.adaptive(
+                value: _isReminderEnabled,
+                onChanged: (val) {
+                  setState(() => _isReminderEnabled = val);
+                },
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
 
-          if (!isGlobalNotiOn)
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-              child: const Row(
-                children: [
-                  Icon(Icons.error_outline, color: Colors.red, size: 20),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text("設定で「通知」をオンにしてください。", style: TextStyle(color: Colors.red, fontSize: 13)),
-                  ),
-                ],
+          if (_isReminderEnabled) ...[
+            if (!isGlobalNotiOn)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8.0),
+                child: Text("※ 設定で通知がオフになっています。", style: TextStyle(color: Colors.red.shade400, fontSize: 12)),
               ),
-            )
-          else
-            DropdownButtonFormField<int>(
-              value: _reminderOption,
-              dropdownColor: isDark ? const Color(0xFF2C2C2E) : Colors.white, // [수정] 드롭다운 메뉴 배경색
-              decoration: InputDecoration(
-                border: OutlineInputBorder(
+            InkWell(
+              onTap: () => _showCupertinoDatePicker(1),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.orange.shade300),
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
+                  color: Colors.orange.withOpacity(0.05),
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                child: Row(
+                  children: [
+                    const Icon(Icons.notifications_active, color: Colors.orange),
+                    const SizedBox(width: 10),
+                    Text(
+                      DateFormat('yyyy/MM/dd HH:mm').format(_reminderDate),
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.orange),
+                    ),
+                  ],
+                ),
               ),
-              items: const [
-                DropdownMenuItem(value: 0, child: Text("なし (None)")),
-                DropdownMenuItem(value: 1, child: Text("時間通り (On Time)")),
-                DropdownMenuItem(value: 2, child: Text("10分前 (10 min before)")),
-                DropdownMenuItem(value: 3, child: Text("1時間前 (1 hour before)")),
-              ],
-              onChanged: (value) => setState(() => _reminderOption = value!),
             ),
+          ],
 
           const Spacer(),
 
@@ -431,13 +467,7 @@ class _AddTodoBottomSheetState extends State<AddTodoBottomSheet> {
                 backgroundColor: Theme.of(context).primaryColor,
               ),
               onPressed: () {
-                DateTime? reminderTime;
-                if (isGlobalNotiOn && _reminderOption != 0) {
-                  if (_reminderOption == 1) reminderTime = _selectedDate;
-                  if (_reminderOption == 2) reminderTime = _selectedDate.subtract(const Duration(minutes: 10));
-                  if (_reminderOption == 3) reminderTime = _selectedDate.subtract(const Duration(hours: 1));
-                }
-                widget.onSaved(_selectedDate, reminderTime);
+                widget.onSaved(_textController.text, _deadlineDate, _isReminderEnabled ? _reminderDate : null);
                 Navigator.pop(context);
               },
               child: const Text("保存する", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
