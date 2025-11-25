@@ -46,4 +46,14 @@ class SettingsViewModel extends ChangeNotifier {
     _isAutoDelete = prefs.getBool('isAutoDelete') ?? false;
     notifyListeners();
   }
+
+  // 모든 설정을 초기화하는 메서드
+  Future<void> clearAllSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+    _isDarkMode = false;
+    _isNotificationOn = true;
+    _isAutoDelete = false;
+    notifyListeners();
+  }
 }

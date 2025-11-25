@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart'; // 아이폰 스타일 다이얼로그용
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../view_model/settings_view_model.dart';
 import '../view_model/todo_view_model.dart';
 
@@ -124,10 +123,8 @@ class SettingsScreen extends StatelessWidget {
                             onPressed: () async {
                               // [기능] 데이터 초기화 로직
                               todoVM.clearAllTodos();
-                              final prefs = await SharedPreferences.getInstance();
-                              await prefs.clear();
-
                               if (context.mounted) {
+                                await context.read<SettingsViewModel>().clearAllSettings();
                                 Navigator.pop(ctx); // 다이얼로그 닫기
                                 Navigator.pop(context); // 설정화면 닫기
                                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("初期化しました")));
