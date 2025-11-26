@@ -2,6 +2,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:flutter/foundation.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -48,8 +49,24 @@ class NotificationService {
 
       // 권한 요청도 여기서
       await androidImplementation.requestNotificationsPermission();
+      // ▼▼▼ [추가] 정확한 알람(Exact Alarm) 권한 체크 및 요청 로직 ▼▼▼
+      await _checkAndroidSchedulePermission();
     }
     // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+  }
+
+  Future<void> _checkAndroidSchedulePermission() async {
+    // 안드로이드 12 (API 31) 이상에서만 필요한 권한입니다.
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      // 현재 권한 상태 확인
+      final status = await Permission.scheduleExactAlarm.status;
+
+      if (status.isDenied) {
+        debugPrint("⚠️ '정확한 알람' 권한이 없습니다. 설정 화면으로 이동합니다.");
+        // 여기서는 심플하게 바로 권한 요청(설정창 이동)을 실행합니다.
+        await Permission.scheduleExactAlarm.request();
+      }
+    }
   }
 
   Future<void> scheduleNotification({required int id, required String title, required DateTime scheduledTime}) async {
