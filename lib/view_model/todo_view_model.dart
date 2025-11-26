@@ -13,20 +13,27 @@ class TodoViewModel extends ChangeNotifier {
     _loadTodos();
   }
 
-  // 추가
+  // 1. 추가
   void addTodo(String title, DateTime due, DateTime? reminder, bool isGlobalOn) {
     int newId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final newTodo = Todo(id: newId, title: title, dueDateTime: due, reminderTime: reminder);
     _todos.add(newTodo);
+
+    // [수정] 과거 시간이면 즉시 알림, 미래면 예약
     if (reminder != null && isGlobalOn) {
-      _notificationService.scheduleNotification(id: newId, title: title, scheduledTime: reminder);
+      if (reminder.isBefore(DateTime.now())) {
+        _notificationService.showImmediateNotification(id: newId, title: title);
+      } else {
+        _notificationService.scheduleNotification(id: newId, title: title, scheduledTime: reminder);
+      }
     }
+
     _sortTodos();
     _saveTodos();
     notifyListeners();
   }
 
-  // 수정
+  // 2. 수정
   void editTodo(int index, String newTitle, DateTime newDue, DateTime? newReminder, bool isGlobalOn) {
     if (index >= _todos.length) return;
     final todo = _todos[index];
@@ -35,15 +42,23 @@ class TodoViewModel extends ChangeNotifier {
     todo.reminderTime = newReminder;
 
     _notificationService.cancelNotification(todo.id);
+
+    // [수정] 과거 시간이면 즉시 알림, 미래면 예약
     if (newReminder != null && isGlobalOn) {
-      _notificationService.scheduleNotification(id: todo.id, title: newTitle, scheduledTime: newReminder);
+      if (newReminder.isBefore(DateTime.now())) {
+        _notificationService.showImmediateNotification(id: todo.id, title: newTitle);
+      } else {
+        _notificationService.scheduleNotification(id: todo.id, title: newTitle, scheduledTime: newReminder);
+      }
     }
+
     _sortTodos();
     _saveTodos();
     notifyListeners();
   }
 
-  // 고정 토글
+  // ... (togglePin, toggleDone, deleteTodo, deleteOverdueTodos, clearAllTodos, cancelAllReminders 등 기존 코드는 변경 없음. 그대로 유지) ...
+
   void togglePin(int index) {
     if (index >= _todos.length) return;
     final targetTodo = _todos[index];
@@ -58,7 +73,6 @@ class TodoViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // 완료 토글
   void toggleDone(int index, bool isAutoDeleteOn) {
     if (index >= _todos.length) return;
     _todos[index].isDone = !_todos[index].isDone;
@@ -67,7 +81,6 @@ class TodoViewModel extends ChangeNotifier {
     }
     _saveTodos();
     notifyListeners();
-
     if (isAutoDeleteOn && _todos[index].isDone) {
       Future.delayed(const Duration(milliseconds: 500), () {
         if (index < _todos.length && _todos[index].isDone) {
@@ -77,20 +90,23 @@ class TodoViewModel extends ChangeNotifier {
     }
   }
 
-  // 알림 시간 업데이트
   void updateReminder(int index, DateTime? newTime, bool isGlobalOn) {
     if (index >= _todos.length) return;
     final todo = _todos[index];
     todo.reminderTime = newTime;
     _notificationService.cancelNotification(todo.id);
     if (newTime != null && isGlobalOn) {
-      _notificationService.scheduleNotification(id: todo.id, title: todo.title, scheduledTime: newTime);
+      // 업데이트 시에도 과거면 즉시 알림
+      if (newTime.isBefore(DateTime.now())) {
+        _notificationService.showImmediateNotification(id: todo.id, title: todo.title);
+      } else {
+        _notificationService.scheduleNotification(id: todo.id, title: todo.title, scheduledTime: newTime);
+      }
     }
     _saveTodos();
     notifyListeners();
   }
 
-  // 삭제
   void deleteTodo(int index) {
     if (index >= _todos.length) return;
     _notificationService.cancelNotification(_todos[index].id);
@@ -99,7 +115,6 @@ class TodoViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // 지난 일정 삭제
   void deleteOverdueTodos() {
     final now = DateTime.now();
     for (var todo in _todos) {
@@ -112,7 +127,6 @@ class TodoViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // 전체 삭제 (초기화)
   void clearAllTodos() {
     _todos.clear();
     _notificationService.cancelAll();

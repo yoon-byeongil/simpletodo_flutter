@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../view_model/todo_view_model.dart';
 import '../view_model/settings_view_model.dart';
@@ -17,10 +19,64 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _titleController = TextEditingController();
+  Timer? _timer;
 
-  // [복구 완료] 정상적으로 일정 추가 창을 띄웁니다.
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      if (mounted) setState(() {});
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndroidPermission();
+    });
+  }
+
+  Future<void> _checkAndroidPermission() async {
+    if (Theme.of(context).platform == TargetPlatform.android) {
+      final status = await Permission.scheduleExactAlarm.status;
+      if (status.isDenied && mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            title: const Text("通知の設定"),
+            content: const Text("正確な時間にリマインダーを受け取るには、アラームとリマインダーの権限を許可してください。"),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("後で")),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  await Permission.scheduleExactAlarm.request();
+                },
+                child: const Text("設定する", style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+  }
+
+  DateTime _getNearestFiveMinuteInterval(DateTime time) {
+    int minute = time.minute;
+    int remainder = minute % 5;
+    int add = (remainder == 0) ? 0 : (5 - remainder);
+    return time.add(Duration(minutes: add)).copyWith(second: 0, millisecond: 0);
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _titleController.dispose();
+    super.dispose();
+  }
+
   void _onAddPressed() {
     if (_titleController.text.isEmpty) return;
+
+    DateTime initialTime = _getNearestFiveMinuteInterval(DateTime.now());
 
     showModalBottomSheet(
       context: context,
@@ -29,7 +85,7 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context) {
         return TodoBottomSheet(
           initialTitle: _titleController.text,
-          initialDue: DateTime.now(),
+          initialDue: initialTime,
           initialReminder: null,
           onSaved: (String title, DateTime due, DateTime? reminder) {
             final isGlobalOn = context.read<SettingsViewModel>().isNotificationOn;
@@ -71,15 +127,12 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.settings_outlined),
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen()));
-            },
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen())),
           ),
         ],
       ),
       body: Column(
         children: [
-          // 입력창
           Container(
             padding: const EdgeInsets.all(16.0),
             decoration: BoxDecoration(
@@ -114,7 +167,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // 리스트 영역
           Expanded(
             child: Consumer2<TodoViewModel, SettingsViewModel>(
               builder: (context, todoVM, settingsVM, child) {
@@ -258,7 +310,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// BottomSheet 코드는 기존과 동일하므로 생략하지 않고 포함 (완전 복구용)
 class TodoBottomSheet extends StatefulWidget {
   final String initialTitle;
   final DateTime initialDue;
@@ -285,25 +336,87 @@ class _TodoBottomSheetState extends State<TodoBottomSheet> {
 
     if (widget.initialReminder != null) {
       _isReminderEnabled = true;
-      _reminderDate = widget.initialReminder!;
+      _reminderDate = _getNearestFiveMinuteInterval(widget.initialReminder!);
     } else {
       _isReminderEnabled = false;
-      _reminderDate = DateTime.now();
+      _reminderDate = _getNearestFiveMinuteInterval(DateTime.now());
     }
+    _deadlineDate = _getNearestFiveMinuteInterval(_deadlineDate);
   }
 
-  void _showCupertinoDatePicker(int type) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    DateTime initial = type == 0 ? _deadlineDate : _reminderDate;
+  DateTime _getNearestFiveMinuteInterval(DateTime time) {
+    int minute = time.minute;
+    int remainder = minute % 5;
+    int add = (remainder == 0) ? 0 : (5 - remainder);
+    return time.add(Duration(minutes: add)).copyWith(second: 0, millisecond: 0);
+  }
 
-    if (initial.isBefore(DateTime.now())) {
-      initial = DateTime.now();
-    }
+  // [수정] 날짜 선택 - 아이폰 스타일 슬라이더 (연-월-일 순)
+  void _pickDate(bool isDeadline) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    DateTime initial = isDeadline ? _deadlineDate : _reminderDate;
 
     showCupertinoModalPopup(
       context: context,
       builder: (ctx) => Container(
-        height: 280,
+        height: 250,
+        color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+        child: Column(
+          children: [
+            Container(
+              color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF0F0F0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  CupertinoButton(
+                    child: const Text("完了", style: TextStyle(fontWeight: FontWeight.bold)),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Localizations.override(
+                context: context,
+                locale: const Locale('ja'),
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.date,
+                  initialDateTime: initial,
+                  minimumDate: DateTime(2020),
+                  maximumDate: DateTime(2100),
+                  // 일본어 로케일에서는 자동으로 '년월일'이 붙지만, 순서 보장을 위해 ymd 설정
+                  dateOrder: DatePickerDateOrder.ymd,
+                  use24hFormat: true,
+                  onDateTimeChanged: (newDate) {
+                    setState(() {
+                      if (isDeadline) {
+                        _deadlineDate = DateTime(newDate.year, newDate.month, newDate.day, _deadlineDate.hour, _deadlineDate.minute);
+                      } else {
+                        _reminderDate = DateTime(newDate.year, newDate.month, newDate.day, _reminderDate.hour, _reminderDate.minute);
+                      }
+                    });
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 시간 선택 (5분 단위 룰렛)
+  void _pickTime(bool isDeadline) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    DateTime initial = isDeadline ? _deadlineDate : _reminderDate;
+
+    // 룰렛 열기 전 5분 단위 보정
+    initial = _getNearestFiveMinuteInterval(initial);
+
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => Container(
+        height: 250,
         color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
         child: Column(
           children: [
@@ -321,16 +434,16 @@ class _TodoBottomSheetState extends State<TodoBottomSheet> {
             ),
             Expanded(
               child: CupertinoDatePicker(
-                mode: CupertinoDatePickerMode.dateAndTime,
+                mode: CupertinoDatePickerMode.time,
                 initialDateTime: initial,
-                minimumDate: DateTime.now().subtract(const Duration(minutes: 1)),
+                minuteInterval: 5,
                 use24hFormat: true,
-                onDateTimeChanged: (newDate) {
+                onDateTimeChanged: (newTime) {
                   setState(() {
-                    if (type == 0) {
-                      _deadlineDate = newDate;
+                    if (isDeadline) {
+                      _deadlineDate = DateTime(_deadlineDate.year, _deadlineDate.month, _deadlineDate.day, newTime.hour, newTime.minute);
                     } else {
-                      _reminderDate = newDate;
+                      _reminderDate = DateTime(_reminderDate.year, _reminderDate.month, _reminderDate.day, newTime.hour, newTime.minute);
                     }
                   });
                 },
@@ -353,7 +466,7 @@ class _TodoBottomSheetState extends State<TodoBottomSheet> {
         color: Theme.of(context).cardColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      height: 600,
+      height: 650,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -379,26 +492,56 @@ class _TodoBottomSheetState extends State<TodoBottomSheet> {
             style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
-          InkWell(
-            onTap: () => _showCupertinoDatePicker(0),
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-              decoration: BoxDecoration(
-                border: Border.all(color: isDark ? Colors.grey.shade700 : Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(12),
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: InkWell(
+                  onTap: () => _pickDate(true),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: isDark ? Colors.grey.shade700 : Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.calendar_month, color: Colors.blueAccent, size: 20),
+                        const SizedBox(width: 8),
+                        Text(DateFormat('yyyy/MM/dd').format(_deadlineDate), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ),
               ),
-              child: Row(
-                children: [
-                  const Icon(Icons.calendar_month, color: Colors.blueAccent),
-                  const SizedBox(width: 10),
-                  Text(DateFormat('yyyy/MM/dd HH:mm').format(_deadlineDate), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                ],
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 2,
+                child: InkWell(
+                  onTap: () => _pickTime(true),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: isDark ? Colors.grey.shade700 : Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.access_time, color: Colors.blueAccent, size: 20),
+                        const SizedBox(width: 8),
+                        Text(DateFormat('HH:mm').format(_deadlineDate), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
 
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -422,27 +565,61 @@ class _TodoBottomSheetState extends State<TodoBottomSheet> {
                 padding: const EdgeInsets.only(bottom: 8.0),
                 child: Text("※ 設定で通知がオフになっています。", style: TextStyle(color: Colors.red.shade400, fontSize: 12)),
               ),
-            InkWell(
-              onTap: () => _showCupertinoDatePicker(1),
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.orange.shade300),
-                  borderRadius: BorderRadius.circular(12),
-                  color: Colors.orange.withOpacity(0.05),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.notifications_active, color: Colors.orange),
-                    const SizedBox(width: 10),
-                    Text(
-                      DateFormat('yyyy/MM/dd HH:mm').format(_reminderDate),
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.orange),
+            Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: InkWell(
+                    onTap: () => _pickDate(false),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.orange.shade300),
+                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.orange.withOpacity(0.05),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.notifications_active, color: Colors.orange, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            DateFormat('yyyy/MM/dd').format(_reminderDate),
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.orange),
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: InkWell(
+                    onTap: () => _pickTime(false),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.orange.shade300),
+                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.orange.withOpacity(0.05),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.access_time, color: Colors.orange, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            DateFormat('HH:mm').format(_reminderDate),
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.orange),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
 
