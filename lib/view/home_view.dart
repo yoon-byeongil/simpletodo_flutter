@@ -18,7 +18,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _titleController = TextEditingController();
 
-  // 추가 버튼 (Bottom Sheet 호출)
+  // [복구 완료] 정상적으로 일정 추가 창을 띄웁니다.
   void _onAddPressed() {
     if (_titleController.text.isEmpty) return;
 
@@ -42,7 +42,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // 수정 버튼 (리스트에서 호출)
   void _onEditPressed(int index, String currentTitle, DateTime currentDue, DateTime? currentReminder) {
     showModalBottomSheet(
       context: context,
@@ -137,13 +136,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   separatorBuilder: (_, __) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final todo = todoVM.todos[index];
-
-                    // [기능] 시간이 지났는지 확인 (현재시간보다 이전이면 true)
                     final isOverdue = todo.dueDateTime.isBefore(DateTime.now()) && !todo.isDone;
 
                     return Slidable(
                       key: ValueKey(todo.id),
-                      // 왼쪽: 고정
                       startActionPane: ActionPane(
                         motion: const ScrollMotion(),
                         children: [
@@ -152,7 +148,6 @@ class _HomeScreenState extends State<HomeScreen> {
                               todoVM.togglePin(index);
                               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(todo.isPinned ? "固定を解除しました" : "タスクを固定しました"), duration: const Duration(seconds: 1)));
                             },
-                            // [수정] 고정 버튼 색상: 진한 회색으로 변경
                             backgroundColor: Colors.grey[700]!,
                             foregroundColor: Colors.white,
                             icon: todo.isPinned ? Icons.push_pin_outlined : Icons.push_pin,
@@ -161,7 +156,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ],
                       ),
-                      // 오른쪽: 수정, 삭제
                       endActionPane: ActionPane(
                         motion: const ScrollMotion(),
                         children: [
@@ -220,7 +214,6 @@ class _HomeScreenState extends State<HomeScreen> {
                               const SizedBox(height: 4),
                               Row(
                                 children: [
-                                  // [기능] 시간이 지났으면 아이콘과 텍스트를 빨간색으로 표시
                                   Icon(Icons.calendar_today, size: 14, color: isOverdue ? Colors.red : Colors.grey.shade600),
                                   const SizedBox(width: 4),
                                   Text(
@@ -265,7 +258,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// 추가/수정 겸용 바텀 시트
+// BottomSheet 코드는 기존과 동일하므로 생략하지 않고 포함 (완전 복구용)
 class TodoBottomSheet extends StatefulWidget {
   final String initialTitle;
   final DateTime initialDue;
@@ -290,7 +283,6 @@ class _TodoBottomSheetState extends State<TodoBottomSheet> {
     _textController = TextEditingController(text: widget.initialTitle);
     _deadlineDate = widget.initialDue;
 
-    // 초기값이 이미 과거라면, 피커의 시작 기준은 현재 시간으로 잡기 위해 로직 분리
     if (widget.initialReminder != null) {
       _isReminderEnabled = true;
       _reminderDate = widget.initialReminder!;
@@ -304,7 +296,6 @@ class _TodoBottomSheetState extends State<TodoBottomSheet> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     DateTime initial = type == 0 ? _deadlineDate : _reminderDate;
 
-    // [수정] 피커를 열 때 초기값이 과거라면 현재 시간으로 보정 (사용자 편의)
     if (initial.isBefore(DateTime.now())) {
       initial = DateTime.now();
     }
@@ -332,7 +323,6 @@ class _TodoBottomSheetState extends State<TodoBottomSheet> {
               child: CupertinoDatePicker(
                 mode: CupertinoDatePickerMode.dateAndTime,
                 initialDateTime: initial,
-                // [수정] 과거 선택 방지 (현재 시간 - 1분 정도 여유)
                 minimumDate: DateTime.now().subtract(const Duration(minutes: 1)),
                 use24hFormat: true,
                 onDateTimeChanged: (newDate) {

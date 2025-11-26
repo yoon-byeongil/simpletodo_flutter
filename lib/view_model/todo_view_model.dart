@@ -13,72 +13,58 @@ class TodoViewModel extends ChangeNotifier {
     _loadTodos();
   }
 
-  // 1. 추가
+  // 추가
   void addTodo(String title, DateTime due, DateTime? reminder, bool isGlobalOn) {
     int newId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-
     final newTodo = Todo(id: newId, title: title, dueDateTime: due, reminderTime: reminder);
-
     _todos.add(newTodo);
-
     if (reminder != null && isGlobalOn) {
       _notificationService.scheduleNotification(id: newId, title: title, scheduledTime: reminder);
     }
-
     _sortTodos();
     _saveTodos();
     notifyListeners();
   }
 
-  // 2. 수정
+  // 수정
   void editTodo(int index, String newTitle, DateTime newDue, DateTime? newReminder, bool isGlobalOn) {
     if (index >= _todos.length) return;
-
     final todo = _todos[index];
     todo.title = newTitle;
     todo.dueDateTime = newDue;
     todo.reminderTime = newReminder;
 
-    // 기존 알림 취소 후 재등록
     _notificationService.cancelNotification(todo.id);
     if (newReminder != null && isGlobalOn) {
       _notificationService.scheduleNotification(id: todo.id, title: newTitle, scheduledTime: newReminder);
     }
-
     _sortTodos();
     _saveTodos();
     notifyListeners();
   }
 
-  // 3. 고정 (Pin) 토글
+  // 고정 토글
   void togglePin(int index) {
     if (index >= _todos.length) return;
-
     final targetTodo = _todos[index];
-
-    // 하나만 고정되도록 다른 핀은 해제
     if (!targetTodo.isPinned) {
       for (var todo in _todos) {
         todo.isPinned = false;
       }
     }
-
     targetTodo.isPinned = !targetTodo.isPinned;
-
     _sortTodos();
     _saveTodos();
     notifyListeners();
   }
 
-  // 4. 완료 체크
+  // 완료 토글
   void toggleDone(int index, bool isAutoDeleteOn) {
     if (index >= _todos.length) return;
     _todos[index].isDone = !_todos[index].isDone;
-
     if (_todos[index].isDone) {
       _notificationService.cancelNotification(_todos[index].id);
     }
-
     _saveTodos();
     notifyListeners();
 
@@ -91,24 +77,20 @@ class TodoViewModel extends ChangeNotifier {
     }
   }
 
-  // 5. 알림 시간만 수정
+  // 알림 시간 업데이트
   void updateReminder(int index, DateTime? newTime, bool isGlobalOn) {
     if (index >= _todos.length) return;
-
     final todo = _todos[index];
     todo.reminderTime = newTime;
-
     _notificationService.cancelNotification(todo.id);
-
     if (newTime != null && isGlobalOn) {
       _notificationService.scheduleNotification(id: todo.id, title: todo.title, scheduledTime: newTime);
     }
-
     _saveTodos();
     notifyListeners();
   }
 
-  // 6. 삭제
+  // 삭제
   void deleteTodo(int index) {
     if (index >= _todos.length) return;
     _notificationService.cancelNotification(_todos[index].id);
@@ -117,25 +99,20 @@ class TodoViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // 7. [추가된 기능] 시간이 지난(Overdue) 일정 일괄 삭제
+  // 지난 일정 삭제
   void deleteOverdueTodos() {
     final now = DateTime.now();
-
-    // 삭제될 항목들의 알림 취소
     for (var todo in _todos) {
       if (todo.dueDateTime.isBefore(now)) {
         _notificationService.cancelNotification(todo.id);
       }
     }
-
-    // 리스트에서 제거
     _todos.removeWhere((todo) => todo.dueDateTime.isBefore(now));
-
     _saveTodos();
     notifyListeners();
   }
 
-  // 8. 전체 초기화
+  // 전체 삭제 (초기화)
   void clearAllTodos() {
     _todos.clear();
     _notificationService.cancelAll();
@@ -143,13 +120,11 @@ class TodoViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // 9. 설정용 - 알림 일괄 취소
   void cancelAllReminders() {
     _notificationService.cancelAll();
     notifyListeners();
   }
 
-  // 10. 설정용 - 알림 일괄 복구
   void restoreAllReminders() {
     final now = DateTime.now();
     for (var todo in _todos) {
@@ -160,7 +135,6 @@ class TodoViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // 정렬 (핀 > 날짜순)
   void _sortTodos() {
     _todos.sort((a, b) {
       if (a.isPinned && !b.isPinned) return -1;
