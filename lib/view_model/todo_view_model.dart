@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:permission_handler/permission_handler.dart'; // 권한 체크용
+import 'package:permission_handler/permission_handler.dart';
 import '../model/todo_model.dart';
 import '../service/notification_service.dart';
 
@@ -14,11 +14,6 @@ class TodoViewModel extends ChangeNotifier {
     _loadTodos();
   }
 
-  // ------------------------------------------------------------------
-  // [Pure Business Logic] View에서 계산하던 로직들을 ViewModel로 이동
-  // ------------------------------------------------------------------
-
-  // 1. 시간 5분 단위 스냅 (계산 로직)
   DateTime normalizeToFiveMinutes(DateTime time) {
     int minute = time.minute;
     int remainder = minute % 5;
@@ -26,20 +21,14 @@ class TodoViewModel extends ChangeNotifier {
     return time.add(Duration(minutes: add)).copyWith(second: 0, millisecond: 0);
   }
 
-  // 2. 안드로이드 권한 상태 확인 (View는 UI만 띄우게 함)
   Future<bool> checkPermissionStatus() async {
     final status = await Permission.scheduleExactAlarm.status;
     return status.isDenied;
   }
 
-  // 3. 권한 요청 실행
   Future<void> requestPermission() async {
     await Permission.scheduleExactAlarm.request();
   }
-
-  // ------------------------------------------------------------------
-  // [Data Manipulation] 기존 기능 로직
-  // ------------------------------------------------------------------
 
   void addTodo(String title, DateTime due, DateTime? reminder, bool isGlobalOn) {
     int newId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
@@ -79,18 +68,32 @@ class TodoViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void togglePin(int index) {
-    if (index >= _todos.length) return;
+  // [수정] 핀 고정 토글 (성공/실패 반환)
+  bool togglePin(int index, bool isPremium) {
+    if (index >= _todos.length) return false;
     final targetTodo = _todos[index];
-    if (!targetTodo.isPinned) {
-      for (var todo in _todos) {
-        todo.isPinned = false;
-      }
+
+    // 이미 고정된 걸 해제하는 건 무조건 허용
+    if (targetTodo.isPinned) {
+      targetTodo.isPinned = false;
+      _sortTodos();
+      _saveTodos();
+      notifyListeners();
+      return true; // 성공
     }
-    targetTodo.isPinned = !targetTodo.isPinned;
+
+    // [BM] 새로 고정하려는데 프리미엄이 아니고, 이미 1개 이상 고정되어 있다면?
+    int pinnedCount = _todos.where((t) => t.isPinned).length;
+    if (!isPremium && pinnedCount >= 1) {
+      return false; // 실패 (돈 내라고 팝업 띄울 예정)
+    }
+
+    // 허용
+    targetTodo.isPinned = true;
     _sortTodos();
     _saveTodos();
     notifyListeners();
+    return true; // 성공
   }
 
   void toggleDone(int index, bool isAutoDeleteOn) {
