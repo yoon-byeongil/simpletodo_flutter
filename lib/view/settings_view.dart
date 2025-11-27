@@ -79,7 +79,6 @@ class SettingsScreen extends StatelessWidget {
                 decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(12)),
                 child: Column(
                   children: [
-                    // [기능 3] 기한 지난 일정 삭제 버튼
                     ListTile(
                       leading: const Icon(Icons.cleaning_services_outlined, color: Colors.orange),
                       title: const Text("期限切れのタスクを削除", style: TextStyle(color: Colors.orange)),
@@ -88,8 +87,8 @@ class SettingsScreen extends StatelessWidget {
                         showCupertinoDialog(
                           context: context,
                           builder: (ctx) => CupertinoAlertDialog(
-                            title: const Text("整理しますか？"), // 정리하시겠습니까?
-                            content: const Text("締め切りが過ぎたタスクを全て削除します。"), // 마감일이 지난 태스크를 모두 삭제합니다.
+                            title: const Text("整理しますか？"),
+                            content: const Text("締め切りが過ぎたタスクを全て削除します。"),
                             actions: [
                               CupertinoDialogAction(child: const Text("キャンセル"), onPressed: () => Navigator.pop(ctx)),
                               CupertinoDialogAction(
@@ -107,8 +106,6 @@ class SettingsScreen extends StatelessWidget {
                       },
                     ),
                     Divider(height: 1, indent: 50, color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
-
-                    // 초기화 버튼
                     ListTile(
                       leading: const Icon(Icons.delete_forever, color: Colors.red),
                       title: const Text("データを初期化", style: TextStyle(color: Colors.red)),

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:permission_handler/permission_handler.dart'; // 권한 체크용
 import '../model/todo_model.dart';
 import '../service/notification_service.dart';
 
@@ -13,13 +14,38 @@ class TodoViewModel extends ChangeNotifier {
     _loadTodos();
   }
 
-  // 1. 추가
+  // ------------------------------------------------------------------
+  // [Pure Business Logic] View에서 계산하던 로직들을 ViewModel로 이동
+  // ------------------------------------------------------------------
+
+  // 1. 시간 5분 단위 스냅 (계산 로직)
+  DateTime normalizeToFiveMinutes(DateTime time) {
+    int minute = time.minute;
+    int remainder = minute % 5;
+    int add = (remainder == 0) ? 0 : (5 - remainder);
+    return time.add(Duration(minutes: add)).copyWith(second: 0, millisecond: 0);
+  }
+
+  // 2. 안드로이드 권한 상태 확인 (View는 UI만 띄우게 함)
+  Future<bool> checkPermissionStatus() async {
+    final status = await Permission.scheduleExactAlarm.status;
+    return status.isDenied;
+  }
+
+  // 3. 권한 요청 실행
+  Future<void> requestPermission() async {
+    await Permission.scheduleExactAlarm.request();
+  }
+
+  // ------------------------------------------------------------------
+  // [Data Manipulation] 기존 기능 로직
+  // ------------------------------------------------------------------
+
   void addTodo(String title, DateTime due, DateTime? reminder, bool isGlobalOn) {
     int newId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final newTodo = Todo(id: newId, title: title, dueDateTime: due, reminderTime: reminder);
     _todos.add(newTodo);
 
-    // [수정] 과거 시간이면 즉시 알림, 미래면 예약
     if (reminder != null && isGlobalOn) {
       if (reminder.isBefore(DateTime.now())) {
         _notificationService.showImmediateNotification(id: newId, title: title);
@@ -27,13 +53,11 @@ class TodoViewModel extends ChangeNotifier {
         _notificationService.scheduleNotification(id: newId, title: title, scheduledTime: reminder);
       }
     }
-
     _sortTodos();
     _saveTodos();
     notifyListeners();
   }
 
-  // 2. 수정
   void editTodo(int index, String newTitle, DateTime newDue, DateTime? newReminder, bool isGlobalOn) {
     if (index >= _todos.length) return;
     final todo = _todos[index];
@@ -43,7 +67,6 @@ class TodoViewModel extends ChangeNotifier {
 
     _notificationService.cancelNotification(todo.id);
 
-    // [수정] 과거 시간이면 즉시 알림, 미래면 예약
     if (newReminder != null && isGlobalOn) {
       if (newReminder.isBefore(DateTime.now())) {
         _notificationService.showImmediateNotification(id: todo.id, title: newTitle);
@@ -51,13 +74,10 @@ class TodoViewModel extends ChangeNotifier {
         _notificationService.scheduleNotification(id: todo.id, title: newTitle, scheduledTime: newReminder);
       }
     }
-
     _sortTodos();
     _saveTodos();
     notifyListeners();
   }
-
-  // ... (togglePin, toggleDone, deleteTodo, deleteOverdueTodos, clearAllTodos, cancelAllReminders 등 기존 코드는 변경 없음. 그대로 유지) ...
 
   void togglePin(int index) {
     if (index >= _todos.length) return;
@@ -96,7 +116,6 @@ class TodoViewModel extends ChangeNotifier {
     todo.reminderTime = newTime;
     _notificationService.cancelNotification(todo.id);
     if (newTime != null && isGlobalOn) {
-      // 업데이트 시에도 과거면 즉시 알림
       if (newTime.isBefore(DateTime.now())) {
         _notificationService.showImmediateNotification(id: todo.id, title: todo.title);
       } else {

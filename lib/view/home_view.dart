@@ -4,7 +4,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 import '../view_model/todo_view_model.dart';
 import '../view_model/settings_view_model.dart';
@@ -28,15 +27,19 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) setState(() {});
     });
 
+    // [MVVM] 권한 로직을 ViewModel에 위임
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkAndroidPermission();
+      _checkPermission();
     });
   }
 
-  Future<void> _checkAndroidPermission() async {
+  Future<void> _checkPermission() async {
     if (Theme.of(context).platform == TargetPlatform.android) {
-      final status = await Permission.scheduleExactAlarm.status;
-      if (status.isDenied && mounted) {
+      // View: "ViewModel아, 권한 상태 어때?"
+      final isDenied = await context.read<TodoViewModel>().checkPermissionStatus();
+
+      // View: "거절됐으면 다이얼로그 띄워줄게" (UI 로직)
+      if (isDenied && mounted) {
         showDialog(
           context: context,
           barrierDismissible: false,
@@ -48,7 +51,8 @@ class _HomeScreenState extends State<HomeScreen> {
               TextButton(
                 onPressed: () async {
                   Navigator.pop(ctx);
-                  await Permission.scheduleExactAlarm.request();
+                  // View: "ViewModel아, 권한 요청 실행해"
+                  await context.read<TodoViewModel>().requestPermission();
                 },
                 child: const Text("設定する", style: TextStyle(fontWeight: FontWeight.bold)),
               ),
@@ -57,13 +61,6 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       }
     }
-  }
-
-  DateTime _getNearestFiveMinuteInterval(DateTime time) {
-    int minute = time.minute;
-    int remainder = minute % 5;
-    int add = (remainder == 0) ? 0 : (5 - remainder);
-    return time.add(Duration(minutes: add)).copyWith(second: 0, millisecond: 0);
   }
 
   @override
@@ -76,7 +73,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void _onAddPressed() {
     if (_titleController.text.isEmpty) return;
 
-    DateTime initialTime = _getNearestFiveMinuteInterval(DateTime.now());
+    // [MVVM] 시간 계산도 ViewModel이 담당
+    DateTime initialTime = context.read<TodoViewModel>().normalizeToFiveMinutes(DateTime.now());
 
     showModalBottomSheet(
       context: context,
@@ -310,6 +308,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
+// --------------------------------------------------------------------------
+// [Bottom Sheet Component] 복잡한 입력 UI를 별도 위젯으로 분리
+// --------------------------------------------------------------------------
 class TodoBottomSheet extends StatefulWidget {
   final String initialTitle;
   final DateTime initialDue;
@@ -336,82 +337,61 @@ class _TodoBottomSheetState extends State<TodoBottomSheet> {
 
     if (widget.initialReminder != null) {
       _isReminderEnabled = true;
-      _reminderDate = _getNearestFiveMinuteInterval(widget.initialReminder!);
+      // [MVVM] 계산은 ViewModel에게 요청해야 하지만,
+      // 여기서는 context 접근 시점 문제로 인해 로컬 함수나 Helper를 쓰는 것이 일반적.
+      // 다만, 일관성을 위해 ViewModel 인스턴스를 통해 계산해도 됨.
+      // 편의상 로직을 그대로 적용.
+      _reminderDate = _localNormalize(widget.initialReminder!);
     } else {
       _isReminderEnabled = false;
-      _reminderDate = _getNearestFiveMinuteInterval(DateTime.now());
+      _reminderDate = _localNormalize(DateTime.now());
     }
-    _deadlineDate = _getNearestFiveMinuteInterval(_deadlineDate);
+    // 초기값 보정
+    _deadlineDate = _localNormalize(_deadlineDate);
   }
 
-  DateTime _getNearestFiveMinuteInterval(DateTime time) {
+  // 로컬 헬퍼 (ViewModel과 동일 로직)
+  DateTime _localNormalize(DateTime time) {
     int minute = time.minute;
     int remainder = minute % 5;
     int add = (remainder == 0) ? 0 : (5 - remainder);
     return time.add(Duration(minutes: add)).copyWith(second: 0, millisecond: 0);
   }
 
-  // [수정] 날짜 선택 - 아이폰 스타일 슬라이더 (연-월-일 순)
-  void _pickDate(bool isDeadline) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    DateTime initial = isDeadline ? _deadlineDate : _reminderDate;
-
-    showCupertinoModalPopup(
+  Future<void> _pickDate(bool isDeadline) async {
+    final initialDate = isDeadline ? _deadlineDate : _reminderDate;
+    final picked = await showDatePicker(
       context: context,
-      builder: (ctx) => Container(
-        height: 250,
-        color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-        child: Column(
-          children: [
-            Container(
-              color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF0F0F0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  CupertinoButton(
-                    child: const Text("完了", style: TextStyle(fontWeight: FontWeight.bold)),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: Localizations.override(
-                context: context,
-                locale: const Locale('ja'),
-                child: CupertinoDatePicker(
-                  mode: CupertinoDatePickerMode.date,
-                  initialDateTime: initial,
-                  minimumDate: DateTime(2020),
-                  maximumDate: DateTime(2100),
-                  // 일본어 로케일에서는 자동으로 '년월일'이 붙지만, 순서 보장을 위해 ymd 설정
-                  dateOrder: DatePickerDateOrder.ymd,
-                  use24hFormat: true,
-                  onDateTimeChanged: (newDate) {
-                    setState(() {
-                      if (isDeadline) {
-                        _deadlineDate = DateTime(newDate.year, newDate.month, newDate.day, _deadlineDate.hour, _deadlineDate.minute);
-                      } else {
-                        _reminderDate = DateTime(newDate.year, newDate.month, newDate.day, _reminderDate.hour, _reminderDate.minute);
-                      }
-                    });
-                  },
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+      initialDate: initialDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      locale: const Locale('ja'),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(primary: Theme.of(context).primaryColor, onPrimary: Colors.white, onSurface: Colors.black),
+            textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(foregroundColor: Theme.of(context).primaryColor)),
+          ),
+          child: child!,
+        );
+      },
     );
+
+    if (picked != null) {
+      setState(() {
+        if (isDeadline) {
+          _deadlineDate = DateTime(picked.year, picked.month, picked.day, _deadlineDate.hour, _deadlineDate.minute);
+        } else {
+          _reminderDate = DateTime(picked.year, picked.month, picked.day, _reminderDate.hour, _reminderDate.minute);
+        }
+      });
+    }
   }
 
-  // 시간 선택 (5분 단위 룰렛)
   void _pickTime(bool isDeadline) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     DateTime initial = isDeadline ? _deadlineDate : _reminderDate;
-
-    // 룰렛 열기 전 5분 단위 보정
-    initial = _getNearestFiveMinuteInterval(initial);
+    initial = _localNormalize(initial); // 보정
 
     showCupertinoModalPopup(
       context: context,
@@ -550,12 +530,7 @@ class _TodoBottomSheetState extends State<TodoBottomSheet> {
                 "通知設定 (Notification)",
                 style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold),
               ),
-              Switch.adaptive(
-                value: _isReminderEnabled,
-                onChanged: (val) {
-                  setState(() => _isReminderEnabled = val);
-                },
-              ),
+              Switch.adaptive(value: _isReminderEnabled, onChanged: (val) => setState(() => _isReminderEnabled = val)),
             ],
           ),
 

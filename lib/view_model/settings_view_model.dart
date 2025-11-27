@@ -47,7 +47,6 @@ class SettingsViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // 모든 설정을 초기화하는 메서드
   Future<void> clearAllSettings() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
