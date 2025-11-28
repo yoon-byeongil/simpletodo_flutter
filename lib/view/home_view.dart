@@ -11,6 +11,7 @@ import '../view_model/settings_view_model.dart';
 import 'settings_view.dart';
 import 'widget/todo_bottom_sheet.dart';
 import 'widget/ad_banner.dart';
+import 'premium_view.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -191,29 +192,46 @@ class _HomeScreenState extends State<HomeScreen> {
                               children: [
                                 SlidableAction(
                                   onPressed: (context) {
-                                    bool success = todoVM.togglePin(index, settingsVM.isPremium);
+                                    final isPremium = context.read<SettingsViewModel>().isPremium;
+                                    final navigator = Navigator.of(context);
+                                    // 1. 일반 시도
+                                    bool success = todoVM.togglePin(index, isPremium);
 
-                                    if (!success) {
+                                    if (success) {
+                                    } else {
+                                      // 2. 실패 시 팝업
                                       showCupertinoDialog(
                                         context: context,
                                         builder: (ctx) => CupertinoAlertDialog(
-                                          title: const Text("プレミアム機能"),
-                                          content: const Text("無料版では1つまで固定できます。\n無制限に固定するにはアップグレードしてください。"),
+                                          title: const Text("ピン留めの上限"),
+                                          content: const Text("無料版では1つまで固定できます。\n既存のピンと入れ替えますか？\nそれとも無制限にしますか？"),
                                           actions: [
-                                            CupertinoDialogAction(child: const Text("キャンセル"), onPressed: () => Navigator.pop(ctx)),
+                                            // [교체 버튼] forceReplace: true 사용
+                                            CupertinoDialogAction(
+                                              child: const Text("入れ替え"),
+                                              onPressed: () {
+                                                Navigator.pop(ctx);
+                                                // ▼ 여기서 강제 교체 옵션 사용!
+                                                todoVM.togglePin(index, isPremium, forceReplace: true);
+                                              },
+                                            ),
+                                            // [상세 보기 버튼]
                                             CupertinoDialogAction(
                                               isDefaultAction: true,
                                               child: const Text("詳細を見る"),
                                               onPressed: () {
-                                                Navigator.pop(ctx);
-                                                Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen()));
+                                                Navigator.pop(ctx); // 다이얼로그 닫기 (ctx는 여기서 사망)
+
+                                                // [핵심] 아까 저장해둔 navigator 변수를 사용해서 이동!
+                                                navigator.push(MaterialPageRoute(builder: (context) => const PremiumScreen()));
                                               },
                                             ),
+                                            // [취소 버튼]
+                                            CupertinoDialogAction(isDestructiveAction: true, child: const Text("キャンセル"), onPressed: () => Navigator.pop(ctx)),
                                           ],
                                         ),
                                       );
                                     }
-                                    // 성공 시 스낵바 제거됨 (아무 동작 안 함)
                                   },
                                   backgroundColor: Colors.grey[700]!,
                                   foregroundColor: Colors.white,

@@ -69,31 +69,47 @@ class TodoViewModel extends ChangeNotifier {
   }
 
   // [수정] 핀 고정 토글 (성공/실패 반환)
-  bool togglePin(int index, bool isPremium) {
+  // [수정] 핀 고정 토글 (통합 버전)
+  bool togglePin(int index, bool isPremium, {bool forceReplace = false}) {
     if (index >= _todos.length) return false;
     final targetTodo = _todos[index];
 
-    // 이미 고정된 걸 해제하는 건 무조건 허용
+    // 1. 해제는 언제나 자유롭게 가능
     if (targetTodo.isPinned) {
       targetTodo.isPinned = false;
+      _sortTodos();
+      _saveTodos();
+      notifyListeners();
+      return true;
+    }
+
+    // 2. 설정 시도
+
+    // [옵션] 교체 모드라면? (다이얼로그에서 '교체' 선택 시)
+    if (forceReplace) {
+      // 기존 핀들 모두 해제 (예전의 그 로직)
+      for (var todo in _todos) {
+        todo.isPinned = false;
+      }
+      targetTodo.isPinned = true;
       _sortTodos();
       _saveTodos();
       notifyListeners();
       return true; // 성공
     }
 
-    // [BM] 새로 고정하려는데 프리미엄이 아니고, 이미 1개 이상 고정되어 있다면?
+    // [일반] 무료 유저 제한 체크
     int pinnedCount = _todos.where((t) => t.isPinned).length;
     if (!isPremium && pinnedCount >= 1) {
-      return false; // 실패 (돈 내라고 팝업 띄울 예정)
+      return false; // 실패 -> 다이얼로그 띄움
     }
 
-    // 허용
+    // [일반] 프리미엄이거나 0개면 그냥 추가
     targetTodo.isPinned = true;
     _sortTodos();
     _saveTodos();
     notifyListeners();
-    return true; // 성공
+    return true;
   }
 
   void toggleDone(int index, bool isAutoDeleteOn) {

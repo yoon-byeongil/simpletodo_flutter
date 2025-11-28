@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../view_model/settings_view_model.dart';
 import '../view_model/todo_view_model.dart';
 import 'widget/ad_banner.dart';
+import 'premium_view.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -46,8 +47,7 @@ class SettingsScreen extends StatelessWidget {
                     subtitle: const Text("無制限ピン留め・広告なし", style: TextStyle(color: Colors.white70, fontSize: 12)),
                     trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
                     onTap: () async {
-                      // 결제 시도 (테스트 모드이므로 바로 성공)
-                      await settingsVM.buyPremium();
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const PremiumScreen()));
                     },
                   ),
                 ),
@@ -174,15 +174,6 @@ class SettingsScreen extends StatelessWidget {
                       },
                     ),
                     Divider(height: 1, indent: 50, color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
-
-                    // [BM] 구매 복원 (애플 필수)
-                    ListTile(
-                      leading: const Icon(Icons.restore, color: Colors.grey),
-                      title: const Text("購入を復元 (Restore)"),
-                      onTap: () async {
-                        await settingsVM.restorePurchase();
-                      },
-                    ),
                   ],
                 ),
               ),
