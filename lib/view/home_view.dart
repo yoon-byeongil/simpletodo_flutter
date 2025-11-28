@@ -4,11 +4,12 @@ import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../view_model/todo_view_model.dart';
 import '../view_model/settings_view_model.dart';
 import 'settings_view.dart';
-import 'todo_bottom_sheet.dart'; // [필수] 분리했던 BottomSheet 파일 import
+import 'todo_bottom_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -24,23 +25,19 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-
-    // 1분마다 화면 갱신 (기한 지남 표시 업데이트용)
     _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
       if (mounted) setState(() {});
     });
 
-    // 안드로이드 권한 체크 (ViewModel에 위임)
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkPermission();
+      _checkAndroidPermission();
     });
   }
 
-  Future<void> _checkPermission() async {
+  Future<void> _checkAndroidPermission() async {
     if (Theme.of(context).platform == TargetPlatform.android) {
-      final isDenied = await context.read<TodoViewModel>().checkPermissionStatus();
-
-      if (isDenied && mounted) {
+      final status = await Permission.scheduleExactAlarm.status;
+      if (status.isDenied && mounted) {
         showDialog(
           context: context,
           barrierDismissible: false,
@@ -70,11 +67,9 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  // 추가 버튼 (Bottom Sheet 호출)
   void _onAddPressed() {
     if (_titleController.text.isEmpty) return;
 
-    // ViewModel을 통해 5분 단위 시간 계산
     DateTime initialTime = context.read<TodoViewModel>().normalizeToFiveMinutes(DateTime.now());
 
     showModalBottomSheet(
@@ -97,7 +92,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // 수정 버튼 (리스트 슬라이드 메뉴에서 호출)
   void _onEditPressed(int index, String currentTitle, DateTime currentDue, DateTime? currentReminder) {
     showModalBottomSheet(
       context: context,
@@ -135,7 +129,6 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (context, todoVM, settingsVM, child) {
           return Column(
             children: [
-              // 1. 상단 간편 입력창
               Container(
                 padding: const EdgeInsets.all(16.0),
                 decoration: BoxDecoration(
@@ -170,7 +163,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              // 2. 할 일 리스트 영역
               Expanded(
                 child: todoVM.todos.isEmpty
                     ? Center(
@@ -189,24 +181,18 @@ class _HomeScreenState extends State<HomeScreen> {
                         separatorBuilder: (_, __) => const SizedBox(height: 12),
                         itemBuilder: (context, index) {
                           final todo = todoVM.todos[index];
-                          // 마감일 지남 여부 (현재시간보다 이전이고, 완료 안 됨)
                           final isOverdue = todo.dueDateTime.isBefore(DateTime.now()) && !todo.isDone;
 
                           return Slidable(
                             key: ValueKey(todo.id),
-                            // 왼쪽 슬라이드: 고정 (Pin) - BM 적용됨
                             startActionPane: ActionPane(
                               motion: const ScrollMotion(),
                               children: [
                                 SlidableAction(
                                   onPressed: (context) {
-                                    // [BM] 고정 시도 -> ViewModel에서 프리미엄 여부 체크
                                     bool success = todoVM.togglePin(index, settingsVM.isPremium);
 
-                                    if (success) {
-                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(todo.isPinned ? "固定を解除しました" : "タスクを固定しました"), duration: const Duration(seconds: 1)));
-                                    } else {
-                                      // [BM] 실패 시 (무료 유저 제한) -> 결제 유도 팝업
+                                    if (!success) {
                                       showCupertinoDialog(
                                         context: context,
                                         builder: (ctx) => CupertinoAlertDialog(
@@ -226,6 +212,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         ),
                                       );
                                     }
+                                    // 성공 시 스낵바 제거됨 (아무 동작 안 함)
                                   },
                                   backgroundColor: Colors.grey[700]!,
                                   foregroundColor: Colors.white,
@@ -235,7 +222,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                               ],
                             ),
-                            // 오른쪽 슬라이드: 수정, 삭제
                             endActionPane: ActionPane(
                               motion: const ScrollMotion(),
                               children: [
@@ -250,7 +236,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 SlidableAction(
                                   onPressed: (context) {
                                     todoVM.deleteTodo(index);
-                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("削除しました")));
+                                    // 삭제 시 스낵바 제거됨
                                   },
                                   backgroundColor: Colors.red,
                                   foregroundColor: Colors.white,
@@ -260,7 +246,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                               ],
                             ),
-                            // 카드 UI
                             child: Card(
                               margin: EdgeInsets.zero,
                               shape: RoundedRectangleBorder(
@@ -330,7 +315,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
               ),
 
-              // 3. [BM] 하단 광고 배너 (프리미엄이 아닐 때만 표시)
               if (!settingsVM.isPremium)
                 Container(
                   height: 60,

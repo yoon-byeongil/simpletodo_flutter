@@ -63,10 +63,7 @@ class SettingsScreen extends StatelessWidget {
                     trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
                     onTap: () async {
                       // 결제 시도 (테스트 모드이므로 바로 성공)
-                      bool success = await settingsVM.buyPremium();
-                      if (success && context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("ありがとうございます！プレミアムになりました。")));
-                      }
+                      await settingsVM.buyPremium();
                     },
                   ),
                 ),
@@ -98,10 +95,8 @@ class SettingsScreen extends StatelessWidget {
                         settingsVM.toggleNotification(val);
                         if (val) {
                           todoVM.restoreAllReminders();
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("通知をオンにしました"), duration: Duration(seconds: 1)));
                         } else {
                           todoVM.cancelAllReminders();
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("通知をオフにしました"), duration: Duration(seconds: 1)));
                         }
                       },
                     ),
@@ -151,7 +146,6 @@ class SettingsScreen extends StatelessWidget {
                                 onPressed: () {
                                   todoVM.deleteOverdueTodos();
                                   Navigator.pop(ctx);
-                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("期限切れのタスクを削除しました")));
                                 },
                               ),
                             ],
@@ -186,7 +180,6 @@ class SettingsScreen extends StatelessWidget {
 
                                     Navigator.pop(ctx);
                                     Navigator.pop(context); // 홈으로 이동
-                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("初期化しました")));
                                   }
                                 },
                                 child: const Text("初期化"),
@@ -204,9 +197,6 @@ class SettingsScreen extends StatelessWidget {
                       title: const Text("購入を復元 (Restore)"),
                       onTap: () async {
                         await settingsVM.restorePurchase();
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("購入状況を確認しました。")));
-                        }
                       },
                     ),
                   ],
