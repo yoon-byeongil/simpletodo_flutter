@@ -9,7 +9,8 @@ import 'package:permission_handler/permission_handler.dart';
 import '../view_model/todo_view_model.dart';
 import '../view_model/settings_view_model.dart';
 import 'settings_view.dart';
-import 'todo_bottom_sheet.dart';
+import 'widget/todo_bottom_sheet.dart';
+import 'widget/ad_banner.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -315,23 +316,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
               ),
 
-              if (!settingsVM.isPremium)
-                Container(
-                  height: 60,
-                  width: double.infinity,
-                  color: isDark ? Colors.grey.shade900 : Colors.grey.shade200,
-                  alignment: Alignment.center,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text("ADVERTISEMENT", style: TextStyle(fontSize: 10, color: isDark ? Colors.grey.shade600 : Colors.grey)),
-                      Text(
-                        "広告バナー領域 (Google AdMob)",
-                        style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-                      ),
-                    ],
-                  ),
-                ),
+              if (!settingsVM.isPremium) const AdBanner(),
             ],
           );
         },

@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import '../view_model/settings_view_model.dart';
 import '../view_model/todo_view_model.dart';
+import 'widget/ad_banner.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -25,24 +26,7 @@ class SettingsScreen extends StatelessWidget {
           ),
 
           // [광고] 하단 배너 (프리미엄이 아닐 때만 표시)
-          bottomNavigationBar: !settingsVM.isPremium
-              ? Container(
-                  height: 60,
-                  width: double.infinity,
-                  color: isDark ? Colors.grey.shade900 : Colors.grey.shade200,
-                  alignment: Alignment.center,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text("ADVERTISEMENT", style: TextStyle(fontSize: 10, color: isDark ? Colors.grey.shade600 : Colors.grey)),
-                      Text(
-                        "広告バナー領域 (Google AdMob)",
-                        style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-                      ),
-                    ],
-                  ),
-                )
-              : null, // 프리미엄이면 숨김
+          bottomNavigationBar: !settingsVM.isPremium ? const AdBanner() : null, // 프리미엄이면 숨김
 
           body: ListView(
             padding: const EdgeInsets.all(16),
