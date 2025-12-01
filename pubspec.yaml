@@ -39,6 +39,7 @@ dev_dependencies:
   
   # Tooling (아이콘 생성기는 개발할 때만 쓰므로 여기 있는 게 정석입니다)
   flutter_launcher_icons: ^0.13.1
+  change_app_package_name: ^1.5.0
 
 flutter:
   uses-material-design: true

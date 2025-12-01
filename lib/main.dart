@@ -31,7 +31,7 @@ class MyApp extends StatelessWidget {
     final isDarkMode = context.watch<SettingsViewModel>().isDarkMode;
 
     return MaterialApp(
-      title: 'Simple Todo',
+      title: '超シンプルTodo',
       debugShowCheckedModeBanner: false,
       themeMode: isDarkMode ? ThemeMode.dark : ThemeMode.light,
 
