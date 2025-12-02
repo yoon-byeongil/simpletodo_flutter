@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart'; // 필수
+import 'package:flutter/cupertino.dart';
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../../const/app_strings.dart';
+import '../../const/app_colors.dart';
+import '../../view_model/settings_view_model.dart';
+import '../../view_model/todo_view_model.dart';
 
 class TodoBottomSheet extends StatefulWidget {
   final String initialTitle;
@@ -25,29 +30,23 @@ class _TodoBottomSheetState extends State<TodoBottomSheet> {
     super.initState();
     _textController = TextEditingController(text: widget.initialTitle);
 
-    // 초기값 5분 단위 보정
-    _deadlineDate = _getNearestFiveMinuteInterval(widget.initialDue);
+    // 초기값 할당
+    _deadlineDate = widget.initialDue;
 
     if (widget.initialReminder != null) {
       _isReminderEnabled = true;
-      _reminderDate = _getNearestFiveMinuteInterval(widget.initialReminder!);
+      _reminderDate = widget.initialReminder!;
     } else {
       _isReminderEnabled = false;
-      _reminderDate = _getNearestFiveMinuteInterval(DateTime.now());
+      _reminderDate = DateTime.now();
     }
   }
 
-  DateTime _getNearestFiveMinuteInterval(DateTime time) {
-    int minute = time.minute;
-    int remainder = minute % 5;
-    int add = (remainder == 0) ? 0 : (5 - remainder);
-    return time.add(Duration(minutes: add)).copyWith(second: 0, millisecond: 0);
-  }
-
-  // [수정된 날짜 선택기] iOS 스타일 룰렛 + 일본어(년월일) + 순서(YMD)
+  // [수정] 날짜 선택: iOS 스타일 룰렛 (연-월-일 순서)
   void _pickDate(bool isDeadline) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     DateTime initial = isDeadline ? _deadlineDate : _reminderDate;
+    final todoVM = context.read<TodoViewModel>();
 
     showCupertinoModalPopup(
       context: context,
@@ -56,14 +55,14 @@ class _TodoBottomSheetState extends State<TodoBottomSheet> {
         color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
         child: Column(
           children: [
-            // 상단 완료 버튼바
+            // 상단 바 (완료 버튼)
             Container(
               color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF0F0F0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   CupertinoButton(
-                    child: const Text("完了", style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: const Text(AppStrings.done, style: TextStyle(fontWeight: FontWeight.bold)),
                     onPressed: () => Navigator.pop(ctx),
                   ),
                 ],
@@ -71,23 +70,24 @@ class _TodoBottomSheetState extends State<TodoBottomSheet> {
             ),
             // 룰렛 영역
             Expanded(
-              // [핵심] 일본어 로케일 강제 적용 (에뮬레이터 언어 무관)
               child: Localizations.override(
                 context: context,
-                locale: const Locale('ja'),
+                locale: const Locale('ja'), // 일본어 강제 (년월일 표시)
                 child: CupertinoDatePicker(
-                  mode: CupertinoDatePickerMode.date, // 날짜만
+                  mode: CupertinoDatePickerMode.date, // 날짜만 선택
                   initialDateTime: initial,
                   minimumDate: DateTime(2000),
                   maximumDate: DateTime(2100),
-                  dateOrder: DatePickerDateOrder.ymd, // [핵심] 연-월-일 순서
+                  // [핵심] 연-월-일 순서 강제 (iOS 스타일)
+                  dateOrder: DatePickerDateOrder.ymd,
                   use24hFormat: true,
                   onDateTimeChanged: (newDate) {
                     setState(() {
                       if (isDeadline) {
-                        _deadlineDate = DateTime(newDate.year, newDate.month, newDate.day, _deadlineDate.hour, _deadlineDate.minute);
+                        // 날짜만 변경 (시간 유지)
+                        _deadlineDate = todoVM.applyNewDate(_deadlineDate, newDate);
                       } else {
-                        _reminderDate = DateTime(newDate.year, newDate.month, newDate.day, _reminderDate.hour, _reminderDate.minute);
+                        _reminderDate = todoVM.applyNewDate(_reminderDate, newDate);
                       }
                     });
                   },
@@ -100,11 +100,14 @@ class _TodoBottomSheetState extends State<TodoBottomSheet> {
     );
   }
 
-  // 시간 선택기 (기존 유지 - 5분 단위)
+  // [유지] 시간 선택: iOS 스타일 룰렛 (5분 단위)
   void _pickTime(bool isDeadline) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final todoVM = context.read<TodoViewModel>();
+
     DateTime initial = isDeadline ? _deadlineDate : _reminderDate;
-    initial = _getNearestFiveMinuteInterval(initial); // 5분 보정
+    // 5분 단위 보정
+    initial = todoVM.normalizeToFiveMinutes(initial);
 
     showCupertinoModalPopup(
       context: context,
@@ -119,7 +122,7 @@ class _TodoBottomSheetState extends State<TodoBottomSheet> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   CupertinoButton(
-                    child: const Text("完了", style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: const Text(AppStrings.done, style: TextStyle(fontWeight: FontWeight.bold)),
                     onPressed: () => Navigator.pop(ctx),
                   ),
                 ],
@@ -127,16 +130,17 @@ class _TodoBottomSheetState extends State<TodoBottomSheet> {
             ),
             Expanded(
               child: CupertinoDatePicker(
-                mode: CupertinoDatePickerMode.time, // 시간만
+                mode: CupertinoDatePickerMode.time, // 시간만 선택
                 initialDateTime: initial,
-                minuteInterval: 5,
+                minuteInterval: 5, // 5분 단위
                 use24hFormat: true,
                 onDateTimeChanged: (newTime) {
                   setState(() {
                     if (isDeadline) {
-                      _deadlineDate = DateTime(_deadlineDate.year, _deadlineDate.month, _deadlineDate.day, newTime.hour, newTime.minute);
+                      // 시간만 변경 (날짜 유지)
+                      _deadlineDate = todoVM.applyNewTime(_deadlineDate, newTime);
                     } else {
-                      _reminderDate = DateTime(_reminderDate.year, _reminderDate.month, _reminderDate.day, newTime.hour, newTime.minute);
+                      _reminderDate = todoVM.applyNewTime(_reminderDate, newTime);
                     }
                   });
                 },
@@ -150,10 +154,7 @@ class _TodoBottomSheetState extends State<TodoBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
-    // ... (기존 build 메서드와 동일) ...
-    // 아래 내용은 변경된 부분이 없으므로 위에서 작성한 _pickDate만 교체되면 됩니다.
-    // 편의를 위해 UI 부분 코드도 다시 적어드립니다.
-
+    final isGlobalNotiOn = context.watch<SettingsViewModel>().isNotificationOn;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
@@ -178,13 +179,13 @@ class _TodoBottomSheetState extends State<TodoBottomSheet> {
           TextField(
             controller: _textController,
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            decoration: const InputDecoration(hintText: "タスク名", border: InputBorder.none),
+            decoration: const InputDecoration(hintText: AppStrings.addTaskHint, border: InputBorder.none),
           ),
           const Divider(),
           const SizedBox(height: 10),
 
           const Text(
-            "締め切り (Deadline)",
+            AppStrings.deadline,
             style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
@@ -193,7 +194,7 @@ class _TodoBottomSheetState extends State<TodoBottomSheet> {
               Expanded(
                 flex: 3,
                 child: InkWell(
-                  onTap: () => _pickDate(true), // 수정된 함수 호출
+                  onTap: () => _pickDate(true), // iOS 룰렛 호출
                   borderRadius: BorderRadius.circular(12),
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
@@ -203,7 +204,7 @@ class _TodoBottomSheetState extends State<TodoBottomSheet> {
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.calendar_month, color: Colors.blueAccent, size: 20),
+                        const Icon(Icons.calendar_month, color: AppColors.primary, size: 20),
                         const SizedBox(width: 8),
                         Text(DateFormat('yyyy/MM/dd').format(_deadlineDate), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                       ],
@@ -215,7 +216,7 @@ class _TodoBottomSheetState extends State<TodoBottomSheet> {
               Expanded(
                 flex: 2,
                 child: InkWell(
-                  onTap: () => _pickTime(true),
+                  onTap: () => _pickTime(true), // iOS 룰렛 호출
                   borderRadius: BorderRadius.circular(12),
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
@@ -226,7 +227,7 @@ class _TodoBottomSheetState extends State<TodoBottomSheet> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.access_time, color: Colors.blueAccent, size: 20),
+                        const Icon(Icons.access_time, color: AppColors.primary, size: 20),
                         const SizedBox(width: 8),
                         Text(DateFormat('HH:mm').format(_deadlineDate), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                       ],
@@ -243,35 +244,51 @@ class _TodoBottomSheetState extends State<TodoBottomSheet> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                "通知設定 (Notification)",
+                AppStrings.notificationSetting,
                 style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold),
               ),
-              Switch.adaptive(value: _isReminderEnabled, onChanged: (val) => setState(() => _isReminderEnabled = val)),
+              Switch.adaptive(
+                value: _isReminderEnabled,
+                onChanged: (val) {
+                  setState(() {
+                    _isReminderEnabled = val;
+                    if (val) {
+                      final todoVM = context.read<TodoViewModel>();
+                      _reminderDate = todoVM.normalizeToFiveMinutes(DateTime.now());
+                    }
+                  });
+                },
+              ),
             ],
           ),
 
           if (_isReminderEnabled) ...[
+            if (!isGlobalNotiOn)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8.0),
+                child: Text(AppStrings.msgNotiOff, style: TextStyle(color: Colors.red.shade400, fontSize: 12)),
+              ),
             Row(
               children: [
                 Expanded(
                   flex: 3,
                   child: InkWell(
-                    onTap: () => _pickDate(false), // 수정된 함수 호출
+                    onTap: () => _pickDate(false), // iOS 룰렛
                     borderRadius: BorderRadius.circular(12),
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
                       decoration: BoxDecoration(
-                        border: Border.all(color: Colors.orange.shade300),
+                        border: Border.all(color: AppColors.notification),
                         borderRadius: BorderRadius.circular(12),
-                        color: Colors.orange.withOpacity(0.05),
+                        color: AppColors.notification.withOpacity(0.05),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.notifications_active, color: Colors.orange, size: 20),
+                          const Icon(Icons.notifications_active, color: AppColors.notification, size: 20),
                           const SizedBox(width: 8),
                           Text(
                             DateFormat('yyyy/MM/dd').format(_reminderDate),
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.orange),
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.notification),
                           ),
                         ],
                       ),
@@ -282,23 +299,23 @@ class _TodoBottomSheetState extends State<TodoBottomSheet> {
                 Expanded(
                   flex: 2,
                   child: InkWell(
-                    onTap: () => _pickTime(false),
+                    onTap: () => _pickTime(false), // iOS 룰렛
                     borderRadius: BorderRadius.circular(12),
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
                       decoration: BoxDecoration(
-                        border: Border.all(color: Colors.orange.shade300),
+                        border: Border.all(color: AppColors.notification),
                         borderRadius: BorderRadius.circular(12),
-                        color: Colors.orange.withOpacity(0.05),
+                        color: AppColors.notification.withOpacity(0.05),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.access_time, color: Colors.orange, size: 20),
+                          const Icon(Icons.access_time, color: AppColors.notification, size: 20),
                           const SizedBox(width: 8),
                           Text(
                             DateFormat('HH:mm').format(_reminderDate),
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.orange),
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.notification),
                           ),
                         ],
                       ),
@@ -323,7 +340,7 @@ class _TodoBottomSheetState extends State<TodoBottomSheet> {
                 widget.onSaved(_textController.text, _deadlineDate, _isReminderEnabled ? _reminderDate : null);
                 Navigator.pop(context);
               },
-              child: const Text("保存する", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              child: const Text(AppStrings.save, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             ),
           ),
           const SizedBox(height: 10),

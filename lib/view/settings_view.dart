@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
+import '../const/app_strings.dart';
+import '../const/app_colors.dart';
 import '../view_model/settings_view_model.dart';
 import '../view_model/todo_view_model.dart';
 import 'widget/ad_banner.dart';
@@ -8,6 +10,20 @@ import 'premium_view.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
+
+  void _showActionDialog(BuildContext context, String title, String content, String actionText, VoidCallback onAction) {
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text(title),
+        content: Text(content),
+        actions: [
+          CupertinoDialogAction(child: const Text(AppStrings.cancel), onPressed: () => Navigator.pop(ctx)),
+          CupertinoDialogAction(isDestructiveAction: true, onPressed: onAction, child: Text(actionText)),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,33 +36,29 @@ class SettingsScreen extends StatelessWidget {
           appBar: AppBar(
             backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
             title: Text(
-              "設定",
+              AppStrings.settingsTitle,
               style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).appBarTheme.foregroundColor),
             ),
             iconTheme: IconThemeData(color: Theme.of(context).appBarTheme.foregroundColor),
           ),
-
-          // [광고] 하단 배너 (프리미엄이 아닐 때만 표시)
-          bottomNavigationBar: !settingsVM.isPremium ? const AdBanner() : null, // 프리미엄이면 숨김
-
+          bottomNavigationBar: !settingsVM.isPremium ? const AdBanner() : null,
           body: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              // [BM] 상단 프리미엄 구매 유도 배너 (프리미엄 아닐 때만 표시)
               if (!settingsVM.isPremium) ...[
                 Card(
-                  color: Colors.indigo,
+                  color: AppColors.premiumBg,
                   elevation: 4,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   child: ListTile(
-                    leading: const Icon(Icons.workspace_premium, color: Colors.amber, size: 32),
+                    leading: const Icon(Icons.workspace_premium, color: AppColors.premiumIcon, size: 32),
                     title: const Text(
-                      "プレミアムにアップグレード",
+                      AppStrings.premiumUpgrade,
                       style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                     ),
-                    subtitle: const Text("無制限ピン留め・広告なし", style: TextStyle(color: Colors.white70, fontSize: 12)),
+                    subtitle: const Text(AppStrings.premiumDesc, style: TextStyle(color: Colors.white70, fontSize: 12)),
                     trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
-                    onTap: () async {
+                    onTap: () {
                       Navigator.push(context, MaterialPageRoute(builder: (context) => const PremiumScreen()));
                     },
                   ),
@@ -54,10 +66,9 @@ class SettingsScreen extends StatelessWidget {
                 const SizedBox(height: 20),
               ],
 
-              // 1. 일반 설정 섹션
-              const Text(
-                "一般 (General)",
-                style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
+              Text(
+                AppStrings.generalSection,
+                style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
 
@@ -65,14 +76,16 @@ class SettingsScreen extends StatelessWidget {
                 decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(12)),
                 child: Column(
                   children: [
-                    // 다크 모드
-                    SwitchListTile(title: const Text("ダークモード"), secondary: const Icon(Icons.dark_mode_outlined), value: settingsVM.isDarkMode, onChanged: (val) => settingsVM.toggleDarkMode(val)),
-                    Divider(height: 1, indent: 50, color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
-
-                    // 알림 설정
                     SwitchListTile(
-                      title: const Text("通知を許可"),
-                      subtitle: Text("締め切り時間に通知を受け取ります", style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                      title: const Text(AppStrings.darkMode),
+                      secondary: const Icon(Icons.dark_mode_outlined),
+                      value: settingsVM.isDarkMode,
+                      onChanged: (val) => settingsVM.toggleDarkMode(val),
+                    ),
+                    Divider(height: 1, indent: 50, color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
+                    SwitchListTile(
+                      title: const Text(AppStrings.allowNotification),
+                      subtitle: Text(AppStrings.allowNotificationDesc, style: const TextStyle(color: Colors.grey, fontSize: 12)),
                       secondary: const Icon(Icons.notifications_outlined),
                       value: settingsVM.isNotificationOn,
                       onChanged: (val) {
@@ -85,11 +98,9 @@ class SettingsScreen extends StatelessWidget {
                       },
                     ),
                     Divider(height: 1, indent: 50, color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
-
-                    // 자동 삭제 설정
                     SwitchListTile(
-                      title: const Text("完了時に自動削除"),
-                      subtitle: Text("チェックするとリストから削除されます", style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                      title: const Text(AppStrings.autoDelete),
+                      subtitle: Text(AppStrings.autoDeleteDesc, style: const TextStyle(color: Colors.grey, fontSize: 12)),
                       secondary: const Icon(Icons.auto_delete_outlined),
                       value: settingsVM.isAutoDelete,
                       onChanged: (val) => settingsVM.toggleAutoDelete(val),
@@ -99,11 +110,9 @@ class SettingsScreen extends StatelessWidget {
               ),
 
               const SizedBox(height: 30),
-
-              // 2. 데이터 관리 섹션
-              const Text(
-                "データ管理 (Data)",
-                style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
+              Text(
+                AppStrings.dataSection,
+                style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
 
@@ -111,69 +120,55 @@ class SettingsScreen extends StatelessWidget {
                 decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(12)),
                 child: Column(
                   children: [
-                    // 기한 지난 일정 삭제
                     ListTile(
                       leading: const Icon(Icons.cleaning_services_outlined, color: Colors.orange),
-                      title: const Text("期限切れのタスクを削除", style: TextStyle(color: Colors.orange)),
-                      subtitle: const Text("過去のタスクを一括削除します"),
-                      onTap: () {
-                        showCupertinoDialog(
-                          context: context,
-                          builder: (ctx) => CupertinoAlertDialog(
-                            title: const Text("整理しますか？"),
-                            content: const Text("締め切りが過ぎたタスクを全て削除します。"),
-                            actions: [
-                              CupertinoDialogAction(child: const Text("キャンセル"), onPressed: () => Navigator.pop(ctx)),
-                              CupertinoDialogAction(
-                                isDestructiveAction: true,
-                                child: const Text("削除"),
-                                onPressed: () {
-                                  todoVM.deleteOverdueTodos();
-                                  Navigator.pop(ctx);
-                                },
-                              ),
-                            ],
-                          ),
-                        );
-                      },
+                      title: const Text(AppStrings.deleteOverdue, style: TextStyle(color: Colors.orange)),
+                      subtitle: const Text(AppStrings.deleteOverdueDesc),
+                      onTap: () => _showActionDialog(context, AppStrings.msgCleanConfirmTitle, AppStrings.msgCleanConfirm, AppStrings.delete, () {
+                        todoVM.deleteOverdueTodos();
+                        Navigator.pop(context);
+                      }),
                     ),
                     Divider(height: 1, indent: 50, color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
 
-                    // 데이터 초기화 (결제 상태도 초기화됨)
+                    // [수정] 비동기 로직 안전장치 추가
                     ListTile(
                       leading: const Icon(Icons.delete_forever, color: Colors.red),
-                      title: const Text("データを初期化", style: TextStyle(color: Colors.red)),
-                      subtitle: const Text("全てのタスクと設定が削除されます"),
-                      onTap: () {
-                        showCupertinoDialog(
-                          context: context,
-                          builder: (ctx) => CupertinoAlertDialog(
-                            title: const Text("初期化しますか？"),
-                            content: const Text("この操作は取り消せません。\n(プレミアム状態もリセットされます)"),
-                            actions: [
-                              CupertinoDialogAction(child: const Text("キャンセル"), onPressed: () => Navigator.pop(ctx)),
-                              CupertinoDialogAction(
-                                isDestructiveAction: true,
-                                onPressed: () async {
-                                  // 할 일 목록 초기화
-                                  todoVM.clearAllTodos();
+                      title: const Text(AppStrings.clearData, style: TextStyle(color: Colors.red)),
+                      subtitle: const Text(AppStrings.clearDataDesc),
+                      onTap: () => _showActionDialog(context, AppStrings.msgResetConfirmTitle, AppStrings.msgResetConfirm, AppStrings.confirm, () async {
+                        // 1. 할 일 초기화
+                        todoVM.clearAllTodos();
 
-                                  if (context.mounted) {
-                                    // 설정 및 결제 상태 초기화
-                                    await context.read<SettingsViewModel>().clearAllSettings();
+                        // 2. 화면이 살아있는지 체크 (중요!)
+                        if (!context.mounted) return;
 
-                                    Navigator.pop(ctx);
-                                    Navigator.pop(context); // 홈으로 이동
-                                  }
-                                },
-                                child: const Text("初期化"),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
+                        // 3. 설정 초기화 (비동기)
+                        await context.read<SettingsViewModel>().clearAllSettings();
+
+                        // 4. 다시 화면 살아있는지 체크
+                        if (!context.mounted) return;
+
+                        // 5. 화면 이동
+                        Navigator.pop(context); // 다이얼로그 닫기
+                        Navigator.pop(context); // 설정 화면 닫기 (홈으로)
+                      }),
                     ),
                     Divider(height: 1, indent: 50, color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
+
+                    // [수정] 구매 복원 안전장치 추가
+                    ListTile(
+                      leading: const Icon(Icons.restore, color: Colors.grey),
+                      title: const Text(AppStrings.restorePurchase),
+                      onTap: () async {
+                        await settingsVM.restorePurchase();
+
+                        // 화면이 살아있을 때만 스낵바 표시
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("購入状況を確認しました")));
+                        }
+                      },
+                    ),
                   ],
                 ),
               ),
