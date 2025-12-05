@@ -5,6 +5,12 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('key.properties')
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace = "com.y101.supersimpletodo"
     compileSdk = flutter.compileSdkVersion
@@ -31,11 +37,26 @@ android {
         versionName = flutter.versionName
     }
 
+    // ▼▼▼ [추가된 부분] 서명 설정 (Signing Configs) ▼▼▼
+    signingConfigs {
+        release {
+            keyAlias = keystoreProperties['keyAlias']
+            keyPassword = keystoreProperties['keyPassword']
+            storeFile = keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+            storePassword = keystoreProperties['storePassword']
+        }
+    }
+    // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // ▼▼▼ [수정된 부분] debug 대신 release 서명 사용 ▼▼▼
+            signingConfig = signingConfigs.release
+            // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+            
+            // (선택 사항) 코드 난독화 및 리소스 축소 (오류 나면 false로 바꾸세요)
+            minifyEnabled false
+            shrinkResources false
         }
     }
 }
