@@ -11,7 +11,8 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
-    
+  
+  device_info_plus: ^10.1.0
   # State Management
   provider: ^6.0.0
   

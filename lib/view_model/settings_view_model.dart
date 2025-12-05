@@ -1,5 +1,8 @@
+import 'dart:io'; // [필수] Platform 사용을 위해 추가
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:permission_handler/permission_handler.dart'; // [필수] 권한 관리
+import 'package:device_info_plus/device_info_plus.dart'; // [필수] 기기 정보 확인
 import '../service/purchase_service.dart';
 
 // [역할] 앱의 전반적인 설정(다크모드, 알림 여부)과 프리미엄 상태를 관리하는 ViewModel
@@ -18,7 +21,6 @@ class SettingsViewModel extends ChangeNotifier {
   bool get isAutoDelete => _isAutoDelete;
 
   // [중요] 프리미엄 여부는 내부에 저장하지 않고 Service에서 실시간으로 가져옴
-  // (결제 정보는 보안상 Service나 서버가 관리하는 것이 원칙)
   bool get isPremium => _purchaseService.isPremium;
 
   // 생성자: 앱이 켜질 때 저장된 설정을 불러오고, 결제 시스템을 초기화함
@@ -39,7 +41,6 @@ class SettingsViewModel extends ChangeNotifier {
 
   // 프리미엄 구매 시도
   Future<bool> buyPremium() async {
-    // 실제 구매 로직은 Service에 위임
     bool success = await _purchaseService.purchasePremium();
     if (success) {
       notifyListeners(); // 성공 시 UI 갱신 (광고 제거, 배너 숨김)
@@ -51,6 +52,36 @@ class SettingsViewModel extends ChangeNotifier {
   Future<void> restorePurchase() async {
     await _purchaseService.restorePurchases();
     notifyListeners(); // 복원된 상태 UI 반영
+  }
+
+  // ------------------------------------------------------------------
+  // [추가] 배터리 최적화 경고 노출 여부 판단 로직
+  // ------------------------------------------------------------------
+
+  Future<bool> shouldShowBatteryWarning() async {
+    // 1. 안드로이드가 아니면 표시 안 함
+    if (!Platform.isAndroid) return false;
+
+    // 2. 이미 사용자가 설정을 껐으면(제한 없음 상태면) 표시 안 함
+    final status = await Permission.ignoreBatteryOptimizations.status;
+    if (status.isGranted) return false; // 이미 허용됨 -> 안 보여줌
+
+    // 3. [핵심] 제조사가 '악명 높은 중국 제조사' 인지 확인
+    final deviceInfo = DeviceInfoPlugin();
+    final androidInfo = await deviceInfo.androidInfo;
+    final manufacturer = androidInfo.manufacturer.toLowerCase();
+
+    // 알림 이슈가 많은 제조사 리스트
+    const badVendors = ['meizu', 'xiaomi', 'oppo', 'vivo', 'huawei', 'letv', 'oneplus'];
+
+    // 리스트에 포함된 제조사일 경우에만 true 반환 (경고 표시)
+    return badVendors.contains(manufacturer);
+  }
+
+  // 최적화 제외 요청 팝업 띄우기
+  Future<void> requestBatteryOptimizationOff() async {
+    await Permission.ignoreBatteryOptimizations.request();
+    notifyListeners();
   }
 
   // ------------------------------------------------------------------
@@ -79,7 +110,6 @@ class SettingsViewModel extends ChangeNotifier {
   // [데이터 영속화] Shared Preferences (내부 저장소)
   // ------------------------------------------------------------------
 
-  // 설정값을 핸드폰 내부 저장소에 저장 (앱 꺼도 유지되게)
   Future<void> _saveSettings() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isDarkMode', _isDarkMode);
@@ -87,10 +117,8 @@ class SettingsViewModel extends ChangeNotifier {
     await prefs.setBool('isAutoDelete', _isAutoDelete);
   }
 
-  // 저장된 설정값을 불러오기
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    // 저장된 값이 없으면(??) 기본값(false/true) 사용
     _isDarkMode = prefs.getBool('isDarkMode') ?? false;
     _isNotificationOn = prefs.getBool('isNotificationOn') ?? true;
     _isAutoDelete = prefs.getBool('isAutoDelete') ?? false;

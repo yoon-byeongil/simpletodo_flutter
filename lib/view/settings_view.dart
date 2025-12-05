@@ -66,6 +66,40 @@ class SettingsScreen extends StatelessWidget {
                 const SizedBox(height: 20),
               ],
 
+              FutureBuilder<bool>(
+                // isBatteryOptimized() 대신 shouldShowBatteryWarning() 사용
+                future: settingsVM.shouldShowBatteryWarning(),
+                builder: (context, snapshot) {
+                  // false 이거나 데이터가 없으면 숨김 (픽셀, 갤럭시는 여기서 숨겨짐)
+                  if (!snapshot.hasData || snapshot.data == false) {
+                    return const SizedBox.shrink();
+                  }
+
+                  // 중국 폰이고 + 최적화가 켜져 있을 때만 보임
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 20),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.orange.withOpacity(0.5)),
+                    ),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      leading: const Icon(Icons.battery_alert, color: Colors.orange),
+                      title: const Text(
+                        "通知設定の確認", // 문구 조금 더 부드럽게 변경
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.orange),
+                      ),
+                      subtitle: const Text("この端末ではバッテリー設定の変更が必要な場合があります", style: TextStyle(fontSize: 12)),
+                      onTap: () async {
+                        await settingsVM.requestBatteryOptimizationOff();
+                      },
+                    ),
+                  );
+                },
+              ),
+
+              // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
               Text(
                 AppStrings.generalSection,
                 style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
